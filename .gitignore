@@ -35,3 +35,8 @@ __pycache__/
 
 # Customized Makefile overrides
 GNUmakefile
+
+*.P
+
+############ Build dir ##########
+stmhal/build-NUSTAT10/

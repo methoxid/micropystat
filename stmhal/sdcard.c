@@ -84,8 +84,10 @@ void HAL_SD_MspDeInit(SD_HandleTypeDef *hsd) {
     __SDIO_CLK_DISABLE();
 }
 
-bool sdcard_is_present(void) {
-    return HAL_GPIO_ReadPin(MICROPY_HW_SDCARD_DETECT_PIN.gpio, MICROPY_HW_SDCARD_DETECT_PIN.pin_mask) == MICROPY_HW_SDCARD_DETECT_PRESENT;
+bool sdcard_is_present(void) {    
+    //we always have the SD card inserted, let us try removing the PA8 pin for SDcard detection... 
+    //return HAL_GPIO_ReadPin(MICROPY_HW_SDCARD_DETECT_PIN.gpio, MICROPY_HW_SDCARD_DETECT_PIN.pin_mask) == MICROPY_HW_SDCARD_DETECT_PRESENT;    
+    return true;
 }
 
 bool sdcard_power_on(void) {
