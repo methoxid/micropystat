@@ -270,6 +270,9 @@ friendly_repl_reset:
         if (pyexec_soft_reset) {
             return 1;
         }
+        if (pyexec_soft_reset) {
+            return 1;
+        }
     }
 }
 
