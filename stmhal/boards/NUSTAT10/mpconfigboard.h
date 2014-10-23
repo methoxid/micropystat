@@ -14,11 +14,13 @@
 #define MICROPY_HW_ENABLE_TIMER     (1)
 #define MICROPY_HW_ENABLE_SERVO     (0)
 #define MICROPY_HW_ENABLE_DAC       (0)
-#define MICROPY_HW_ENABLE_I2C1      (1)
+#define MICROPY_HW_ENABLE_I2C1      (0)
 #define MICROPY_HW_ENABLE_SPI1      (1)
 //#define MICROPY_HW_ENABLE_SPI2      (0) // new AM
 #define MICROPY_HW_ENABLE_SPI3      (1)
 #define MICROPY_HW_ENABLE_CC3K      (0)
+#define MICROPY_HW_ENABLE_CAN       (0)
+
 
 // USRSW has no pullup or pulldown, and pressing the switch makes the input go low
 #define MICROPY_HW_USRSW_PIN        (pin_A0)  /// (pin_A0) //=nustat10 //B3 = pyV10
