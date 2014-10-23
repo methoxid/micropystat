@@ -24,6 +24,8 @@ USBDEV_DIR=usbdev
 FATFS_DIR=fatfs
 DFU=../tools/dfu.py
 # may need to prefix dfu-util with sudo
+USE_PYDFU ?= 0
+PYDFU = ../tools/pydfu.py
 DFU_UTIL ?= ../tools/dfu-util
 DEVICE=0483:df11
 
@@ -78,6 +80,7 @@ SRC_C = \
 	usbd_desc_cdc_msc.c \
 	usbd_cdc_interface.c \
 	usbd_msc_storage.c \
+	mphal.c \
 	irq.c \
 	pendsv.c \
 	systick.c  \
@@ -249,9 +252,13 @@ all: $(BUILD)/firmware.dfu $(BUILD)/firmware.hex
 
 deploy: $(BUILD)/firmware.dfu
 	$(ECHO) "Writing $< to the board"
+ifeq ($(USE_PYDFU),1)
+	$(Q)$(PYTHON) $(PYDFU) -u $<
+else
 	$(Q)$(DFU_UTIL) -a 0 -d $(DEVICE) -D $<
 	$(Q)$(DFU_UTIL) -a 0 -d $(DEVICE) -s 0x08000000:leave -U tempfile000.tmp
 	rm -f tempfile000.tmp
+endif
 
 $(BUILD)/firmware.dfu: $(BUILD)/firmware.elf
 	$(ECHO) "Create $@"
