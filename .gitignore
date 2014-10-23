@@ -40,3 +40,5 @@ GNUmakefile
 
 ############ Build dir ##########
 stmhal/build-NUSTAT10/
+*.delete*
+

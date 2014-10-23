@@ -24,7 +24,7 @@ USBDEV_DIR=usbdev
 FATFS_DIR=fatfs
 DFU=../tools/dfu.py
 # may need to prefix dfu-util with sudo
-DFU_UTIL ?= dfu-util
+DFU_UTIL ?= ../tools/dfu-util
 DEVICE=0483:df11
 
 CROSS_COMPILE = arm-none-eabi-
@@ -250,6 +250,8 @@ all: $(BUILD)/firmware.dfu $(BUILD)/firmware.hex
 deploy: $(BUILD)/firmware.dfu
 	$(ECHO) "Writing $< to the board"
 	$(Q)$(DFU_UTIL) -a 0 -d $(DEVICE) -D $<
+	$(Q)$(DFU_UTIL) -a 0 -d $(DEVICE) -s 0x08000000:leave -U tempfile000.tmp
+	rm -f tempfile000.tmp
 
 $(BUILD)/firmware.dfu: $(BUILD)/firmware.elf
 	$(ECHO) "Create $@"
