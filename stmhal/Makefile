@@ -1,6 +1,7 @@
 # Select the board to build for: if not given on the command line,
 # then default to PYBV10.
-BOARD ?= NUSTAT10
+#NUSTAT10
+BOARD ?= BIPOT16
 ifeq ($(wildcard boards/$(BOARD)/.),)
 $(error Invalid BOARD specified)
 endif
