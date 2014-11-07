@@ -50,10 +50,17 @@
 #define DEBUG_PRINT (1)
 #define DEBUG_printf DEBUG_printf
 #else // don't print debugging info
+#define DEBUG_PRINT (0)
 #define DEBUG_printf(...) (void)0
 #endif
 
 #define PATH_SEP_CHAR '/'
+
+bool mp_obj_is_package(mp_obj_t module) {
+    mp_obj_t dest[2];
+    mp_load_method_maybe(module, MP_QSTR___path__, dest);
+    return dest[0] != MP_OBJ_NULL;
+}
 
 STATIC mp_import_stat_t stat_dir_or_file(vstr_t *path) {
     //printf("stat %s\n", vstr_str(path));
@@ -122,7 +129,7 @@ STATIC void do_load(mp_obj_t module_obj, vstr_t *file) {
     mp_parse_compile_execute(lex, MP_PARSE_FILE_INPUT, mod_globals, mod_globals);
 }
 
-mp_obj_t mp_builtin___import__(mp_uint_t n_args, mp_obj_t *args) {
+mp_obj_t mp_builtin___import__(mp_uint_t n_args, const mp_obj_t *args) {
 #if DEBUG_PRINT
     DEBUG_printf("__import__:\n");
     for (mp_uint_t i = 0; i < n_args; i++) {
@@ -279,6 +286,14 @@ mp_obj_t mp_builtin___import__(mp_uint_t n_args, mp_obj_t *args) {
                 // module not already loaded, so load it!
 
                 module_obj = mp_obj_new_module(mod_name);
+
+                // if args[3] (fromtuple) has magic value False, set up
+                // this module for command-line "-m" option (set module's
+                // name to __main__ instead of real name).
+                if (i == mod_len && fromtuple == mp_const_false) {
+                    mp_obj_module_t *o = module_obj;
+                    mp_obj_dict_store(o->globals, MP_OBJ_NEW_QSTR(MP_QSTR___name__), MP_OBJ_NEW_QSTR(MP_QSTR___main__));
+                }
 
                 if (stat == MP_IMPORT_STAT_DIR) {
                     DEBUG_printf("%s is dir\n", vstr_str(&path));

@@ -1,4 +1,5 @@
 #define BIPOT16
+#define PYBV10
 
 #define MICROPY_HW_BOARD_NAME       "BIPOT16"
 #define MICROPY_HW_MCU_NAME         "STM32F405RG"

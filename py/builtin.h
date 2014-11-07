@@ -24,7 +24,7 @@
  * THE SOFTWARE.
  */
 
-mp_obj_t mp_builtin___import__(mp_uint_t n_args, mp_obj_t *args);
+mp_obj_t mp_builtin___import__(mp_uint_t n_args, const mp_obj_t *args);
 mp_obj_t mp_builtin_open(mp_uint_t n_args, const mp_obj_t *args, mp_map_t *kwargs);
 
 MP_DECLARE_CONST_FUN_OBJ(mp_builtin___build_class___obj);
@@ -35,6 +35,7 @@ MP_DECLARE_CONST_FUN_OBJ(mp_builtin_all_obj);
 MP_DECLARE_CONST_FUN_OBJ(mp_builtin_any_obj);
 MP_DECLARE_CONST_FUN_OBJ(mp_builtin_bin_obj);
 MP_DECLARE_CONST_FUN_OBJ(mp_builtin_callable_obj);
+MP_DECLARE_CONST_FUN_OBJ(mp_builtin_compile_obj);
 MP_DECLARE_CONST_FUN_OBJ(mp_builtin_chr_obj);
 MP_DECLARE_CONST_FUN_OBJ(mp_builtin_dir_obj);
 MP_DECLARE_CONST_FUN_OBJ(mp_builtin_divmod_obj);
@@ -60,6 +61,7 @@ MP_DECLARE_CONST_FUN_OBJ(mp_builtin_ord_obj);
 MP_DECLARE_CONST_FUN_OBJ(mp_builtin_pow_obj);
 MP_DECLARE_CONST_FUN_OBJ(mp_builtin_print_obj);
 MP_DECLARE_CONST_FUN_OBJ(mp_builtin_repr_obj);
+MP_DECLARE_CONST_FUN_OBJ(mp_builtin_round_obj);
 MP_DECLARE_CONST_FUN_OBJ(mp_builtin_sorted_obj);
 MP_DECLARE_CONST_FUN_OBJ(mp_builtin_sum_obj);
 

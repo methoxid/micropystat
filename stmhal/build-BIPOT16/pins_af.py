@@ -3,7 +3,7 @@ PINS_AF = (
   ('LED_G', (1, 'TIM2_CH3'), (2, 'TIM5_CH3'), (3, 'TIM9_CH1'), (7, 'USART2_TX'), ),
   ('LED_R', (1, 'TIM2_CH4'), (2, 'TIM5_CH4'), (3, 'TIM9_CH2'), (7, 'USART2_RX'), ),
   ('A4', (5, 'SPI1_NSS'), (6, 'SPI3_NSS'), (7, 'USART2_CK'), ),
-  ('A5', (1, 'TIM2_CH1_ETR'), (3, 'TIM8_CH1N'), (5, 'SPI1_SCK'), ),
+  ('A5', (1, 'TIM2_CH1'), (1, 'TIM2_ETR'), (3, 'TIM8_CH1N'), (5, 'SPI1_SCK'), ),
   ('MUX2A1', (1, 'TIM1_BKIN'), (2, 'TIM3_CH1'), (3, 'TIM8_BKIN'), (5, 'SPI1_MISO'), (9, 'TIM13_CH1'), ),
   ('MUX2A0', (1, 'TIM1_CH1N'), (2, 'TIM3_CH2'), (3, 'TIM8_CH1N'), (5, 'SPI1_MOSI'), (9, 'TIM14_CH1'), ),
   ('WIFIFCAH', (2, 'TIM4_CH1'), (4, 'I2C1_SCL'), (7, 'USART1_TX'), ),

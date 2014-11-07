@@ -80,13 +80,14 @@
 
 struct _pyb_uart_obj_t {
     mp_obj_base_t base;
-    pyb_uart_t uart_id;
-    bool is_enabled;
-    UART_HandleTypeDef uart;
+    UART_HandleTypeDef uart;            // this is 17 words big
     IRQn_Type irqn;
+    pyb_uart_t uart_id : 8;
+    bool is_enabled : 1;
+    byte char_width;                    // 0 for 7,8 bit chars, 1 for 9 bit chars
+    uint16_t char_mask;                 // 0x7f for 7 bit, 0xff for 8 bit, 0x1ff for 9 bit
     uint16_t timeout;                   // timeout waiting for first char
     uint16_t timeout_char;              // timeout waiting between chars
-    uint16_t char_width;                // 0 for 7,8 bit chars, 1 for 9 bit chars
     uint16_t read_buf_len;              // len in chars; buf can hold len-1 chars
     volatile uint16_t read_buf_head;    // indexes first empty slot
     uint16_t read_buf_tail;             // indexes first full slot (not full if equals head)
@@ -115,7 +116,7 @@ void uart_deinit(void) {
 }
 
 // assumes Init parameters have been set up correctly
-bool uart_init2(pyb_uart_obj_t *uart_obj) {
+STATIC bool uart_init2(pyb_uart_obj_t *uart_obj) {
     USART_TypeDef *UARTx;
     IRQn_Type irqn;
     uint32_t GPIO_Pin;
@@ -140,7 +141,7 @@ bool uart_init2(pyb_uart_obj_t *uart_obj) {
             __USART1_CLK_ENABLE();
             break;
 
-        // USART2 is on PA2/PA3 (CK on PA4), PD5/PD6 (CK on PD7)
+        // USART2 is on PA2/PA3 (CTS,RTS,CK on PA0,PA1,PA4), PD5/PD6 (CK on PD7)
         case PYB_UART_2:
             UARTx = USART2;
             irqn = USART2_IRQn;
@@ -149,10 +150,17 @@ bool uart_init2(pyb_uart_obj_t *uart_obj) {
             GPIO_Port = GPIOA;
             GPIO_Pin = GPIO_PIN_2 | GPIO_PIN_3;
 
+            if (uart_obj->uart.Init.HwFlowCtl & UART_HWCONTROL_RTS) {
+                GPIO_Pin |= GPIO_PIN_1;
+            }
+            if (uart_obj->uart.Init.HwFlowCtl & UART_HWCONTROL_CTS) {
+                GPIO_Pin |= GPIO_PIN_0;
+            }
+
             __USART2_CLK_ENABLE();
             break;
 
-        // USART3 is on PB10/PB11 (CK on PB12), PC10/PC11 (CK on PC12), PD8/PD9 (CK on PD10)
+        // USART3 is on PB10/PB11 (CK,CTS,RTS on PB12,PB13,PB14), PC10/PC11 (CK on PC12), PD8/PD9 (CK on PD10)
         case PYB_UART_3:
             UARTx = USART3;
             irqn = USART3_IRQn;
@@ -161,6 +169,13 @@ bool uart_init2(pyb_uart_obj_t *uart_obj) {
 #if defined(PYBV3) || defined(PYBV4) | defined(PYBV10)
             GPIO_Port = GPIOB;
             GPIO_Pin = GPIO_PIN_10 | GPIO_PIN_11;
+
+            if (uart_obj->uart.Init.HwFlowCtl & UART_HWCONTROL_RTS) {
+                GPIO_Pin |= GPIO_PIN_14;
+            }
+            if (uart_obj->uart.Init.HwFlowCtl & UART_HWCONTROL_CTS) {
+                GPIO_Pin |= GPIO_PIN_13;
+            }
 #else
             GPIO_Port = GPIOD;
             GPIO_Pin = GPIO_PIN_8 | GPIO_PIN_9;
@@ -266,7 +281,7 @@ int uart_rx_char(pyb_uart_obj_t *self) {
         return data;
     } else {
         // no buffering
-        return self->uart.Instance->DR;
+        return self->uart.Instance->DR & self->char_mask;
     }
 }
 
@@ -301,6 +316,7 @@ void uart_irq_handler(mp_uint_t uart_id) {
 
     if (__HAL_UART_GET_FLAG(&self->uart, UART_FLAG_RXNE) != RESET) {
         int data = self->uart.Instance->DR; // clears UART_FLAG_RXNE
+        data &= self->char_mask;
         if (self->read_buf_len != 0) {
             uint16_t next_head = (self->read_buf_head + 1) % self->read_buf_len;
             if (next_head != self->read_buf_tail) {
@@ -326,9 +342,12 @@ STATIC void pyb_uart_print(void (*print)(void *env, const char *fmt, ...), void 
     if (!self->is_enabled) {
         print(env, "UART(%u)", self->uart_id);
     } else {
+        mp_int_t bits = (self->uart.Init.WordLength == UART_WORDLENGTH_8B ? 8 : 9);
+        if (self->uart.Init.Parity != UART_PARITY_NONE) {
+            bits -= 1;
+        }
         print(env, "UART(%u, baudrate=%u, bits=%u, parity=",
-            self->uart_id, self->uart.Init.BaudRate,
-            self->uart.Init.WordLength == UART_WORDLENGTH_8B ? 8 : 9);
+            self->uart_id, self->uart.Init.BaudRate, bits);
         if (self->uart.Init.Parity == UART_PARITY_NONE) {
             print(env, "None");
         } else {
@@ -345,7 +364,7 @@ STATIC void pyb_uart_print(void (*print)(void *env, const char *fmt, ...), void 
 /// Initialise the UART bus with the given parameters:
 ///
 ///   - `baudrate` is the clock rate.
-///   - `bits` is the number of bits per byte, 8 or 9.
+///   - `bits` is the number of bits per byte, 7, 8 or 9.
 ///   - `parity` is the parity, `None`, 0 (even) or 1 (odd).
 ///   - `stop` is the number of stop bits, 1 or 2.
 ///   - `timeout` is the timeout in milliseconds to wait for the first character.
@@ -357,6 +376,7 @@ STATIC mp_obj_t pyb_uart_init_helper(pyb_uart_obj_t *self, mp_uint_t n_args, con
         { MP_QSTR_bits, MP_ARG_INT, {.u_int = 8} },
         { MP_QSTR_parity, MP_ARG_OBJ, {.u_obj = mp_const_none} },
         { MP_QSTR_stop, MP_ARG_INT, {.u_int = 1} },
+        { MP_QSTR_flow, MP_ARG_KW_ONLY | MP_ARG_INT, {.u_int = UART_HWCONTROL_NONE} },
         { MP_QSTR_timeout, MP_ARG_KW_ONLY | MP_ARG_INT, {.u_int = 1000} },
         { MP_QSTR_timeout_char, MP_ARG_KW_ONLY | MP_ARG_INT, {.u_int = 0} },
         { MP_QSTR_read_buf_len, MP_ARG_KW_ONLY | MP_ARG_INT, {.u_int = 64} },
@@ -369,20 +389,40 @@ STATIC mp_obj_t pyb_uart_init_helper(pyb_uart_obj_t *self, mp_uint_t n_args, con
     // set the UART configuration values
     memset(&self->uart, 0, sizeof(self->uart));
     UART_InitTypeDef *init = &self->uart.Init;
+
+    // baudrate
     init->BaudRate = args[0].u_int;
-    init->WordLength = args[1].u_int == 8 ? UART_WORDLENGTH_8B : UART_WORDLENGTH_9B;
+
+    // parity
+    mp_int_t bits = args[1].u_int;
     if (args[2].u_obj == mp_const_none) {
         init->Parity = UART_PARITY_NONE;
     } else {
         mp_int_t parity = mp_obj_get_int(args[2].u_obj);
         init->Parity = (parity & 1) ? UART_PARITY_ODD : UART_PARITY_EVEN;
+        bits += 1; // STs convention has bits including parity
     }
+
+    // number of bits
+    if (bits == 8) {
+        init->WordLength = UART_WORDLENGTH_8B;
+    } else if (bits == 9) {
+        init->WordLength = UART_WORDLENGTH_9B;
+    } else {
+        nlr_raise(mp_obj_new_exception_msg_varg(&mp_type_ValueError, "unsupported combination of bits and parity"));
+    }
+
+    // stop bits
     switch (args[3].u_int) {
         case 1: init->StopBits = UART_STOPBITS_1; break;
         default: init->StopBits = UART_STOPBITS_2; break;
     }
+
+    // flow control
+    init->HwFlowCtl = args[4].u_int;
+
+    // extra config (not yet configurable)
     init->Mode = UART_MODE_TX_RX;
-    init->HwFlowCtl = UART_HWCONTROL_NONE;
     init->OverSampling = UART_OVERSAMPLING_16;
 
     // init UART (if it fails, it's because the port doesn't exist)
@@ -391,19 +431,25 @@ STATIC mp_obj_t pyb_uart_init_helper(pyb_uart_obj_t *self, mp_uint_t n_args, con
     }
 
     // set timeouts
-    self->timeout = args[4].u_int;
-    self->timeout_char = args[5].u_int;
+    self->timeout = args[5].u_int;
+    self->timeout_char = args[6].u_int;
 
     // setup the read buffer
     m_del(byte, self->read_buf, self->read_buf_len << self->char_width);
     if (init->WordLength == UART_WORDLENGTH_9B && init->Parity == UART_PARITY_NONE) {
+        self->char_mask = 0x1ff;
         self->char_width = CHAR_WIDTH_9BIT;
     } else {
+        if (init->WordLength == UART_WORDLENGTH_9B || init->Parity == UART_PARITY_NONE) {
+            self->char_mask = 0xff;
+        } else {
+            self->char_mask = 0x7f;
+        }
         self->char_width = CHAR_WIDTH_8BIT;
     }
     self->read_buf_head = 0;
     self->read_buf_tail = 0;
-    if (args[6].u_int <= 0) {
+    if (args[7].u_int <= 0) {
         // no read buffer
         self->read_buf_len = 0;
         self->read_buf = NULL;
@@ -411,8 +457,8 @@ STATIC mp_obj_t pyb_uart_init_helper(pyb_uart_obj_t *self, mp_uint_t n_args, con
         __HAL_UART_DISABLE_IT(&self->uart, UART_IT_RXNE);
     } else {
         // read buffer using interrupts
-        self->read_buf_len = args[6].u_int;
-        self->read_buf = m_new(byte, args[6].u_int << self->char_width);
+        self->read_buf_len = args[7].u_int;
+        self->read_buf = m_new(byte, args[7].u_int << self->char_width);
         __HAL_UART_ENABLE_IT(&self->uart, UART_IT_RXNE);
         HAL_NVIC_SetPriority(self->irqn, 0xd, 0xd); // next-to-next-to lowest priority
         HAL_NVIC_EnableIRQ(self->irqn);
@@ -575,53 +621,6 @@ STATIC mp_obj_t pyb_uart_readchar(mp_obj_t self_in) {
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(pyb_uart_readchar_obj, pyb_uart_readchar);
 
-/// \method readinto(buf, len=-1)
-///
-/// Read data on the bus:
-///
-///   - `buf` is a mutable buffer which will be filled with read characters.
-///   - `len` is the maximum number of characters to read; if negative, uses len(buf).
-///
-/// Return value: number of characters stored in buf.
-STATIC mp_obj_t pyb_uart_readinto(mp_uint_t n_args, const mp_obj_t *pos_args) {
-    pyb_uart_obj_t *self = pos_args[0];
-
-    // get the buffer to read into
-    mp_buffer_info_t bufinfo;
-    mp_get_buffer_raise(pos_args[1], &bufinfo, MP_BUFFER_WRITE);
-    bufinfo.len >>= self->char_width;
-
-    // adjust the length, if given
-    if (n_args == 3) {
-        mp_int_t len = mp_obj_get_int(pos_args[2]);
-        if (len >= 0 && len < bufinfo.len) {
-            bufinfo.len = len;
-        }
-    }
-
-    // make sure we want at least 1 char, and wait for it to become available
-    if (bufinfo.len == 0 || !uart_rx_wait(self, self->timeout)) {
-        return MP_OBJ_NEW_SMALL_INT(0);
-    }
-
-    // read the chars
-    byte *buf = bufinfo.buf;
-    for (;;) {
-        int data = uart_rx_char(self);
-        if (self->char_width == CHAR_WIDTH_9BIT) {
-            *(uint16_t*)buf = data;
-            buf += 2;
-        } else {
-            *buf++ = data;
-        }
-        if (--bufinfo.len == 0 || !uart_rx_wait(self, self->timeout_char)) {
-            // return the number of chars read
-            return mp_obj_new_int((buf - (byte*)bufinfo.buf) >> self->char_width);
-        }
-    }
-}
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR(pyb_uart_readinto_obj, 2, pyb_uart_readinto);
-
 STATIC const mp_map_elem_t pyb_uart_locals_dict_table[] = {
     // instance methods
 
@@ -635,12 +634,17 @@ STATIC const mp_map_elem_t pyb_uart_locals_dict_table[] = {
     { MP_OBJ_NEW_QSTR(MP_QSTR_readall), (mp_obj_t)&mp_stream_readall_obj },
     /// \method readline()
     { MP_OBJ_NEW_QSTR(MP_QSTR_readline), (mp_obj_t)&mp_stream_unbuffered_readline_obj},
+    /// \method readinto(buf[, nbytes])
+    { MP_OBJ_NEW_QSTR(MP_QSTR_readinto), (mp_obj_t)&mp_stream_readinto_obj },
     /// \method write(buf)
     { MP_OBJ_NEW_QSTR(MP_QSTR_write), (mp_obj_t)&mp_stream_write_obj },
 
     { MP_OBJ_NEW_QSTR(MP_QSTR_writechar), (mp_obj_t)&pyb_uart_writechar_obj },
     { MP_OBJ_NEW_QSTR(MP_QSTR_readchar), (mp_obj_t)&pyb_uart_readchar_obj },
-    { MP_OBJ_NEW_QSTR(MP_QSTR_readinto), (mp_obj_t)&pyb_uart_readinto_obj },
+
+    // class constants
+    { MP_OBJ_NEW_QSTR(MP_QSTR_RTS), MP_OBJ_NEW_SMALL_INT(UART_HWCONTROL_RTS) },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_CTS), MP_OBJ_NEW_SMALL_INT(UART_HWCONTROL_CTS) },
 };
 
 STATIC MP_DEFINE_CONST_DICT(pyb_uart_locals_dict, pyb_uart_locals_dict_table);

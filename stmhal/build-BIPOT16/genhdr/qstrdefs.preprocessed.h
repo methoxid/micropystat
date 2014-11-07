@@ -3,11 +3,11 @@
 # 1 "../py/qstrdefs.h"
 # 27 "../py/qstrdefs.h"
 # 1 "../py/mpconfig.h" 1
-# 31 "../py/mpconfig.h"
+# 43 "../py/mpconfig.h"
 # 1 "./mpconfigport.h" 1
 # 27 "./mpconfigport.h"
        
-# 70 "./mpconfigport.h"
+# 71 "./mpconfigport.h"
 extern const struct _mp_obj_fun_builtin_t mp_builtin_help_obj;
 extern const struct _mp_obj_fun_builtin_t mp_builtin_input_obj;
 extern const struct _mp_obj_fun_builtin_t mp_builtin_open_obj;
@@ -27,12 +27,12 @@ extern const struct _mp_obj_module_t mp_module_utime;
 extern const struct _mp_obj_module_t mp_module_uselect;
 extern const struct _mp_obj_module_t mp_module_usocket;
 extern const struct _mp_obj_module_t mp_module_network;
-# 122 "./mpconfigport.h"
+# 123 "./mpconfigport.h"
 typedef int mp_int_t;
 typedef unsigned int mp_uint_t;
 typedef void *machine_ptr_t;
 typedef const void *machine_const_ptr_t;
-# 135 "./mpconfigport.h"
+# 136 "./mpconfigport.h"
 # 1 "hal/inc/stm32f4xx_hal.h" 1
 # 48 "hal/inc/stm32f4xx_hal.h"
 # 1 "boards/BIPOT16/stm32f4xx_hal_conf.h" 1
@@ -5884,7 +5884,7 @@ void HAL_EnableDBGStandbyMode(void);
 void HAL_DisableDBGStandbyMode(void);
 void HAL_EnableCompensationCell(void);
 void HAL_DisableCompensationCell(void);
-# 136 "./mpconfigport.h" 2
+# 137 "./mpconfigport.h" 2
 
 static inline void enable_irq(mp_uint_t state) {
     __set_PRIMASK(state);
@@ -5895,9 +5895,9 @@ static inline mp_uint_t disable_irq(void) {
     __disable_irq();
     return state;
 }
-# 162 "./mpconfigport.h"
+# 163 "./mpconfigport.h"
 # 1 "boards/BIPOT16/mpconfigboard.h" 1
-# 163 "./mpconfigport.h" 2
+# 164 "./mpconfigport.h" 2
 
 
 # 1 "/opt/local/lib/gcc/arm-none-eabi/4.7.3/../../../../arm-none-eabi/include/alloca.h" 1 3
@@ -6243,9 +6243,9 @@ extern struct _reent *const _global_impure_ptr ;
 
 void _reclaim_reent (struct _reent *);
 # 12 "/opt/local/lib/gcc/arm-none-eabi/4.7.3/../../../../arm-none-eabi/include/alloca.h" 2 3
-# 166 "./mpconfigport.h" 2
-# 32 "../py/mpconfig.h" 2
-# 246 "../py/mpconfig.h"
+# 167 "./mpconfigport.h" 2
+# 44 "../py/mpconfig.h" 2
+# 264 "../py/mpconfig.h"
 typedef float mp_float_t;
 # 28 "../py/qstrdefs.h" 2
 
@@ -6331,6 +6331,7 @@ Q(GeneratorExit)
 Q(ImportError)
 Q(IndentationError)
 Q(IndexError)
+Q(KeyboardInterrupt)
 Q(KeyError)
 Q(LookupError)
 Q(MemoryError)
@@ -6423,6 +6424,7 @@ Q(range)
 Q(read)
 Q(repr)
 Q(reversed)
+Q(round)
 Q(sorted)
 Q(staticmethod)
 Q(sum)
@@ -6435,6 +6437,12 @@ Q(type)
 Q(value)
 Q(write)
 Q(zip)
+
+
+
+
+
+
 
 Q(sep)
 Q(end)
@@ -6571,7 +6579,7 @@ Q(cmath)
 Q(phase)
 Q(polar)
 Q(rect)
-# 360 "../py/qstrdefs.h"
+# 368 "../py/qstrdefs.h"
 Q(alloc_emergency_exception_buf)
 
 
@@ -6677,6 +6685,7 @@ Q(gc)
 Q(collect)
 Q(disable)
 Q(enable)
+Q(isenabled)
 Q(mem_free)
 Q(mem_alloc)
 

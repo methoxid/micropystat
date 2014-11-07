@@ -61,6 +61,8 @@
 #include "netapp.h"
 #include "patch_prog.h"
 
+/// \moduleref network
+
 int CC3000_EXPORT(errno); // for cc3000 driver
 
 STATIC mp_obj_t cc3k_socket_new(mp_uint_t family, mp_uint_t type, mp_uint_t protocol, int *_errno);
@@ -139,6 +141,8 @@ STATIC int cc3k_gethostbyname(mp_obj_t nic, const char *name, mp_uint_t len, uin
 
 /******************************************************************************/
 // Micro Python bindings; CC3k class
+
+/// \class CC3k - driver for CC3000 Wifi modules
 
 typedef struct _cc3k_obj_t {
     mp_obj_base_t base;
@@ -381,7 +385,7 @@ STATIC mp_obj_t cc3k_socket_send(mp_obj_t self_in, mp_obj_t buf_in) {
     mp_int_t bytes = 0;
     while (bytes < bufinfo.len) {
         int n = MIN((bufinfo.len - bytes), MAX_TX_PACKET);
-        n = CC3000_EXPORT(send)(self->fd, bufinfo.buf + bytes, n, 0);
+        n = CC3000_EXPORT(send)(self->fd, (uint8_t*)bufinfo.buf + bytes, n, 0);
         if (n <= 0) {
             nlr_raise(mp_obj_new_exception_arg1(&mp_type_OSError, MP_OBJ_NEW_SMALL_INT(CC3000_EXPORT(errno))));
         }

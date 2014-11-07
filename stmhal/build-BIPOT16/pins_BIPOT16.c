@@ -103,14 +103,15 @@ const pin_af_obj_t pin_A4_af[] = {
 const pin_obj_t pin_A4 = PIN(A, 4, 3, pin_A4_af, PIN_ADC1 | PIN_ADC2, 4);
 
 const pin_af_obj_t pin_A5_af[] = {
-  AF( 1, TIM     ,  2, CH1_ETR   , TIM2    ), // TIM2_CH1_ETR
+  AF( 1, TIM     ,  2, CH1       , TIM2    ), // TIM2_CH1
+  AF( 1, TIM     ,  2, ETR       , TIM2    ), // TIM2_ETR
   AF( 3, TIM     ,  8, CH1N      , TIM8    ), // TIM8_CH1N
   AF( 5, SPI     ,  1, SCK       , SPI1    ), // SPI1_SCK
   //(10, OTG     ,  0, HS_ULPI_CK, OTG     ), // OTG_HS_ULPI_CK
   //(15, EVENTOUT,  0,           , EVENTOUT), // EVENTOUT
 };
 
-const pin_obj_t pin_A5 = PIN(A, 5, 3, pin_A5_af, PIN_ADC1 | PIN_ADC2, 5);
+const pin_obj_t pin_A5 = PIN(A, 5, 4, pin_A5_af, PIN_ADC1 | PIN_ADC2, 5);
 
 const pin_af_obj_t pin_A6_af[] = {
   AF( 1, TIM     ,  1, BKIN      , TIM1    ), // TIM1_BKIN
