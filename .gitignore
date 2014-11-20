@@ -2,10 +2,10 @@
 ###################
 *.o
 *.a
-*.elf
-*.bin
+#*.elf
+#*.bin
 *.map
-*.hex
+#*.hex
 *.dis
 *.exe
 
