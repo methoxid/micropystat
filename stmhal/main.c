@@ -239,9 +239,17 @@ soft_reset:
     led_state(4, 0);
     uint reset_mode = 1;
 
-#if MICROPY_HW_HAS_SWITCH
-    if (switch_get()) {
-        for (uint i = 0; i < 3000; i++) {
+#if MICROPY_HW_HAS_SWITCH    
+    uint switch_delay;
+    for (switch_delay = 0; switch_delay < 202; switch_delay++) {
+            if (!switch_get()) {                
+                break;
+            }
+            HAL_Delay(50);
+        }
+    //if (switch_get() && (switch_delay>=200)) {
+    if (switch_get() && (switch_delay>=200)) {
+        for (uint i = 0; i < 30000; i++) {
             if (!switch_get()) {
                 break;
             }
