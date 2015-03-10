@@ -73,24 +73,29 @@ static FATFS fatfs1;
 #endif
 
 void flash_error(int n) {
+    led_state(PYB_LEDG, 0);
+    led_state(PYB_LEDB, 0);
     for (int i = 0; i < n; i++) {
-        led_state(PYB_LED_R1, 1);
-        led_state(PYB_LED_R2, 0);
+        led_state(PYB_LEDR, 1);
+//        led_state(PYB_LED_R1, 1);
+//        led_state(PYB_LED_R2, 0);
         HAL_Delay(250);
-        led_state(PYB_LED_R1, 0);
-        led_state(PYB_LED_R2, 1);
+        led_state(PYB_LEDR, 0);        
+//        led_state(PYB_LED_R1, 0);
+//        led_state(PYB_LED_R2, 1);
         HAL_Delay(250);
     }
-    led_state(PYB_LED_R2, 0);
+    //led_state(PYB_LED_R2, 0);
+    led_state(PYB_LEDR, 0);
 }
 
 void NORETURN __fatal_error(const char *msg) {
     for (volatile uint delay = 0; delay < 10000000; delay++) {
     }
     led_state(1, 1);
-    led_state(2, 1);
-    led_state(3, 1);
-    led_state(4, 1);
+    led_state(2, 0); //1
+    led_state(3, 0); //1
+    led_state(4, 0); //1
     stdout_tx_strn("\nFATAL ERROR:\n", 14);
     stdout_tx_strn(msg, strlen(msg));
     for (uint i = 0;;) {
@@ -258,20 +263,24 @@ soft_reset:
                 if (++reset_mode > 3) {
                     reset_mode = 1;
                 }
-                led_state(2, reset_mode & 1);
-                led_state(3, reset_mode & 2);
-                led_state(4, reset_mode & 4);
+////AM: no blinking leds                
+                led_state(1, reset_mode & 1);
+////                led_state(2, reset_mode & 1);
+////                led_state(3, reset_mode & 2);
+////                led_state(4, reset_mode & 4);
             }
         }
         // flash the selected reset mode
-        for (uint i = 0; i < 6; i++) {
+        for (uint i = 0; i < 6; i++) {            
             led_state(2, 0);
             led_state(3, 0);
             led_state(4, 0);
             HAL_Delay(50);
-            led_state(2, reset_mode & 1);
-            led_state(3, reset_mode & 2);
-            led_state(4, reset_mode & 4);
+////AM: no blinking leds            
+            led_state(1, reset_mode & 1);
+////            led_state(2, reset_mode & 1);
+////            led_state(3, reset_mode & 2);
+////            led_state(4, reset_mode & 4);
             HAL_Delay(50);
         }
         HAL_Delay(400);
@@ -380,7 +389,9 @@ soft_reset:
 
             // keep LED on for at least 200ms
             sys_tick_wait_at_least(start_tick, 200);
-            led_state(PYB_LED_R2, 0);
+            //// AM no blinking leds
+            ////led_state(PYB_LED_R2, 0);            
+            led_state(1, 0);
         } else if (res == FR_OK) {
             // mount sucessful
         } else {
@@ -412,7 +423,9 @@ soft_reset:
             // doesn't exist, create fresh file
 
             // LED on to indicate creation of boot.py
-            led_state(PYB_LED_R2, 1);
+            //// AM  
+            led_state(1, 1);
+            ////led_state(PYB_LED_R2, 1);
             uint32_t start_tick = HAL_GetTick();
 
             FIL fp;
@@ -424,7 +437,9 @@ soft_reset:
 
             // keep LED on for at least 200ms
             sys_tick_wait_at_least(start_tick, 200);
-            led_state(PYB_LED_R2, 0);
+            ////AM
+            led_state(1, 0);
+            ////led_state(PYB_LED_R2, 0);
         }
     }
 

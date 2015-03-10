@@ -40,6 +40,11 @@ typedef enum {
     PYB_LED_G = 2,
     PYB_LED_B = 3,
     PYB_LED_O = 4,
+    // BIPOT20
+    PYB_LEDR = 2,
+    PYB_LEDG = 3,
+    PYB_LEDB = 1,
+
 } pyb_led_t;
 
 void led_init(void);
