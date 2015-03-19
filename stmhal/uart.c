@@ -130,7 +130,7 @@ STATIC bool uart_init2(pyb_uart_obj_t *uart_obj) {
             irqn = USART1_IRQn;
             GPIO_AF_UARTx = GPIO_AF7_USART1;
 
-#if defined (PYBV4) || defined(PYBV10)
+#if defined (PYBV4) || defined(PYBV10) || defined(BIPOT20)
             GPIO_Port = GPIOB;
             GPIO_Pin = GPIO_PIN_6 | GPIO_PIN_7;
 #else

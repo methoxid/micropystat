@@ -36,7 +36,7 @@ typedef const void *machine_const_ptr_t;
 # 1 "hal/inc/stm32f4xx_hal.h" 1
 # 48 "hal/inc/stm32f4xx_hal.h"
 # 1 "boards/BIPOT20/stm32f4xx_hal_conf.h" 1
-# 236 "boards/BIPOT20/stm32f4xx_hal_conf.h"
+# 237 "boards/BIPOT20/stm32f4xx_hal_conf.h"
 # 1 "hal/inc/stm32f4xx_hal_rcc.h" 1
 # 47 "hal/inc/stm32f4xx_hal_rcc.h"
 # 1 "hal/inc/stm32f4xx_hal_def.h" 1
@@ -2243,7 +2243,7 @@ void HAL_RCC_NMI_IRQHandler(void);
 
 
 void HAL_RCC_CCSCallback(void);
-# 237 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
+# 238 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
 
 
 
@@ -2291,7 +2291,7 @@ void HAL_GPIO_TogglePin(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin);
 HAL_StatusTypeDef HAL_GPIO_LockPin(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin);
 void HAL_GPIO_EXTI_IRQHandler(uint16_t GPIO_Pin);
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin);
-# 241 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
+# 242 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
 
 
 
@@ -2435,7 +2435,7 @@ void HAL_DMA_IRQHandler(DMA_HandleTypeDef *hdma);
 
 HAL_DMA_StateTypeDef HAL_DMA_GetState(DMA_HandleTypeDef *hdma);
 uint32_t HAL_DMA_GetError(DMA_HandleTypeDef *hdma);
-# 245 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
+# 246 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
 
 
 
@@ -2458,7 +2458,7 @@ uint32_t HAL_NVIC_GetActive(IRQn_Type IRQn);
 void HAL_SYSTICK_CLKSourceConfig(uint32_t CLKSource);
 void HAL_SYSTICK_IRQHandler(void);
 void HAL_SYSTICK_Callback(void);
-# 249 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
+# 250 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
 
 
 
@@ -2663,7 +2663,7 @@ HAL_StatusTypeDef HAL_ADC_AnalogWDGConfig(ADC_HandleTypeDef* hadc, ADC_AnalogWDG
 
 HAL_ADC_StateTypeDef HAL_ADC_GetState(ADC_HandleTypeDef* hadc);
 uint32_t HAL_ADC_GetError(ADC_HandleTypeDef *hadc);
-# 253 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
+# 254 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
 
 
 
@@ -2707,12 +2707,12 @@ uint32_t HAL_CRC_Calculate(CRC_HandleTypeDef *hcrc, uint32_t pBuffer[], uint32_t
 
 
 HAL_CRC_StateTypeDef HAL_CRC_GetState(CRC_HandleTypeDef *hcrc);
-# 261 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
+# 262 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
 
 
 
 # 1 "hal/inc/stm32f4xx_hal_cryp.h" 1
-# 265 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
+# 266 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
 
 
 
@@ -2806,12 +2806,12 @@ void HAL_DAC_ConvCpltCallbackCh1(DAC_HandleTypeDef* hdac);
 void HAL_DAC_ConvHalfCpltCallbackCh1(DAC_HandleTypeDef* hdac);
 void HAL_DAC_ErrorCallbackCh1(DAC_HandleTypeDef *hdac);
 void HAL_DAC_DMAUnderrunCallbackCh1(DAC_HandleTypeDef *hdac);
-# 273 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
+# 274 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
 
 
 
 # 1 "hal/inc/stm32f4xx_hal_dcmi.h" 1
-# 277 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
+# 278 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
 
 
 
@@ -2946,7 +2946,7 @@ HAL_StatusTypeDef HAL_FLASH_OB_Launch(void);
 FLASH_ErrorTypeDef HAL_FLASH_GetError(void);
 
 HAL_StatusTypeDef FLASH_WaitForLastOperation(uint32_t Timeout);
-# 285 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
+# 286 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
 
 
 
@@ -3213,7 +3213,7 @@ HAL_StatusTypeDef HAL_SRAM_WriteOperation_Disable(SRAM_HandleTypeDef *hsram);
 
 
 HAL_SRAM_StateTypeDef HAL_SRAM_GetState(SRAM_HandleTypeDef *hsram);
-# 289 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
+# 290 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
 
 
 
@@ -3317,7 +3317,7 @@ HAL_StatusTypeDef HAL_NOR_WriteOperation_Disable(NOR_HandleTypeDef *hnor);
 
 HAL_NOR_StateTypeDef HAL_NOR_GetState(NOR_HandleTypeDef *hnor);
 NOR_StatusTypedef HAL_NOR_GetStatus(NOR_HandleTypeDef *hnor, uint32_t Address, uint32_t Timeout);
-# 293 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
+# 294 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
 
 
 
@@ -3418,7 +3418,7 @@ HAL_StatusTypeDef HAL_NAND_GetECC(NAND_HandleTypeDef *hnand, uint32_t *ECCval, u
 
 HAL_NAND_StateTypeDef HAL_NAND_GetState(NAND_HandleTypeDef *hnand);
 uint32_t HAL_NAND_Read_Status(NAND_HandleTypeDef *hnand);
-# 297 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
+# 298 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
 
 
 
@@ -3473,7 +3473,7 @@ void HAL_PCCARD_ITCallback(PCCARD_HandleTypeDef *hpccard);
 HAL_PCCARD_StateTypeDef HAL_PCCARD_GetState(PCCARD_HandleTypeDef *hpccard);
 CF_StatusTypedef HAL_CF_GetStatus(PCCARD_HandleTypeDef *hpccard);
 CF_StatusTypedef HAL_CF_ReadStatus(PCCARD_HandleTypeDef *hpccard);
-# 301 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
+# 302 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
 
 
 
@@ -3482,7 +3482,7 @@ CF_StatusTypedef HAL_CF_ReadStatus(PCCARD_HandleTypeDef *hpccard);
 
 
 # 1 "hal/inc/stm32f4xx_hal_hash.h" 1
-# 309 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
+# 310 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
 
 
 
@@ -3625,7 +3625,7 @@ void HAL_I2C_ErrorCallback(I2C_HandleTypeDef *hi2c);
 
 HAL_I2C_StateTypeDef HAL_I2C_GetState(I2C_HandleTypeDef *hi2c);
 uint32_t HAL_I2C_GetError(I2C_HandleTypeDef *hi2c);
-# 313 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
+# 314 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
 
 
 
@@ -3682,12 +3682,12 @@ HAL_StatusTypeDef HAL_IWDG_Refresh(IWDG_HandleTypeDef *hiwdg);
 
 
 HAL_IWDG_StateTypeDef HAL_IWDG_GetState(IWDG_HandleTypeDef *hiwdg);
-# 321 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
+# 322 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
 
 
 
 # 1 "hal/inc/stm32f4xx_hal_ltdc.h" 1
-# 325 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
+# 326 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
 
 
 
@@ -3734,7 +3734,7 @@ void HAL_PWR_EnterSTANDBYMode(void);
 
 void HAL_PWR_PVD_IRQHandler(void);
 void HAL_PWR_PVDCallback(void);
-# 329 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
+# 330 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
 
 
 
@@ -3777,7 +3777,7 @@ void HAL_RNG_ErrorCallback(RNG_HandleTypeDef *hrng);
 
 
 HAL_RNG_StateTypeDef HAL_RNG_GetState(RNG_HandleTypeDef *hrng);
-# 333 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
+# 334 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
 
 
 
@@ -4011,7 +4011,7 @@ HAL_RTCStateTypeDef HAL_RTC_GetState(RTC_HandleTypeDef *hrtc);
 HAL_StatusTypeDef RTC_EnterInitMode(RTC_HandleTypeDef* hrtc);
 uint8_t RTC_ByteToBcd2(uint8_t Value);
 uint8_t RTC_Bcd2ToByte(uint8_t Value);
-# 337 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
+# 338 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
 
 
 
@@ -4378,7 +4378,7 @@ HAL_SD_ErrorTypedef HAL_SD_HighSpeed (SD_HandleTypeDef *hsd);
 HAL_SD_ErrorTypedef HAL_SD_SendSDStatus(SD_HandleTypeDef *hsd, uint32_t *pSDstatus);
 HAL_SD_ErrorTypedef HAL_SD_GetCardStatus(SD_HandleTypeDef *hsd, HAL_SD_CardStatusTypedef *pCardStatus);
 HAL_SD_TransferStateTypedef HAL_SD_GetStatus(SD_HandleTypeDef *hsd);
-# 345 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
+# 346 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
 
 
 
@@ -4523,7 +4523,7 @@ void HAL_SPI_TxRxHalfCpltCallback(SPI_HandleTypeDef *hspi);
 
 HAL_SPI_StateTypeDef HAL_SPI_GetState(SPI_HandleTypeDef *hspi);
 HAL_SPI_ErrorTypeDef HAL_SPI_GetError(SPI_HandleTypeDef *hspi);
-# 349 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
+# 350 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
 
 
 
@@ -5013,7 +5013,7 @@ void HAL_TIM_DMADelayPulseCplt(DMA_HandleTypeDef *hdma);
 void HAL_TIM_DMAError(DMA_HandleTypeDef *hdma);
 void HAL_TIM_DMACaptureCplt(DMA_HandleTypeDef *hdma);
 void TIM_CCxChannelCmd(TIM_TypeDef* TIMx, uint32_t Channel, uint32_t ChannelState);
-# 353 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
+# 354 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
 
 
 
@@ -5147,7 +5147,7 @@ HAL_StatusTypeDef HAL_HalfDuplex_EnableReceiver(UART_HandleTypeDef *huart);
 
 HAL_UART_StateTypeDef HAL_UART_GetState(UART_HandleTypeDef *huart);
 uint32_t HAL_UART_GetError(UART_HandleTypeDef *huart);
-# 357 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
+# 358 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
 
 
 
@@ -5276,7 +5276,7 @@ void HAL_USART_ErrorCallback(USART_HandleTypeDef *husart);
 
 HAL_USART_StateTypeDef HAL_USART_GetState(USART_HandleTypeDef *husart);
 uint32_t HAL_USART_GetError(USART_HandleTypeDef *husart);
-# 361 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
+# 362 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
 
 
 
@@ -5409,7 +5409,7 @@ void HAL_SMARTCARD_ErrorCallback(SMARTCARD_HandleTypeDef *hsc);
 
 HAL_SMARTCARD_StateTypeDef HAL_SMARTCARD_GetState(SMARTCARD_HandleTypeDef *hsc);
 uint32_t HAL_SMARTCARD_GetError(SMARTCARD_HandleTypeDef *hsc);
-# 369 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
+# 370 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
 
 
 
@@ -5469,7 +5469,7 @@ void HAL_WWDG_IRQHandler(WWDG_HandleTypeDef *hwwdg);
 
 
 HAL_WWDG_StateTypeDef HAL_WWDG_GetState(WWDG_HandleTypeDef *hwwdg);
-# 373 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
+# 374 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
 
 
 
@@ -5776,7 +5776,7 @@ HAL_StatusTypeDef HAL_PCD_DeActiveRemoteWakeup(PCD_HandleTypeDef *hpcd);
 
 
 PCD_StateTypeDef HAL_PCD_GetState(PCD_HandleTypeDef *hpcd);
-# 377 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
+# 378 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
 
 
 
@@ -5858,7 +5858,7 @@ uint32_t HAL_HCD_HC_GetXferCount(HCD_HandleTypeDef *hhcd, uint8_t chnum);
 HCD_HCStateTypeDef HAL_HCD_HC_GetState(HCD_HandleTypeDef *hhcd, uint8_t chnum);
 uint32_t HAL_HCD_GetCurrentFrame(HCD_HandleTypeDef *hhcd);
 uint32_t HAL_HCD_GetCurrentSpeed(HCD_HandleTypeDef *hhcd);
-# 381 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
+# 382 "boards/BIPOT20/stm32f4xx_hal_conf.h" 2
 # 49 "hal/inc/stm32f4xx_hal.h" 2
 # 151 "hal/inc/stm32f4xx_hal.h"
 HAL_StatusTypeDef HAL_Init(void);

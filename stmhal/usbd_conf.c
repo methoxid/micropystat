@@ -71,17 +71,22 @@ void HAL_PCD_MspInit(PCD_HandleTypeDef *hpcd)
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct); 
     
 	/* Configure VBUS Pin */
+#if USE_USB_OTG_ID    
+/*  /////////////////AM   
     GPIO_InitStruct.Pin = GPIO_PIN_9;
     GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-	
-#if USE_USB_OTG_ID
+	*/
+////AM 
+////#if USE_USB_OTG_ID
+    /* //////////////////////////////
     GPIO_InitStruct.Pin = GPIO_PIN_10;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_OD;
     GPIO_InitStruct.Pull = GPIO_PULLUP;
     GPIO_InitStruct.Alternate = GPIO_AF10_OTG_FS;
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct); 
+    */
 #endif
 
     /* Enable USB FS Clocks */ 
@@ -92,6 +97,7 @@ void HAL_PCD_MspInit(PCD_HandleTypeDef *hpcd)
     
     /* Enable USBFS Interrupt */
     HAL_NVIC_EnableIRQ(OTG_FS_IRQn);
+
   } 
   
   else if(hpcd->Instance == USB_OTG_HS)
@@ -340,7 +346,7 @@ USBD_StatusTypeDef  USBD_LL_Init (USBD_HandleTypeDef *pdev)
   hpcd.Init.phy_itface = PCD_PHY_EMBEDDED; 
   hpcd.Init.Sof_enable = 0;
   hpcd.Init.speed = PCD_SPEED_FULL;
-#if defined(HYDRABUSV10)
+#if defined(HYDRABUSV10) || defined(BIPOT16) || defined(BIPOT20)
   hpcd.Init.vbus_sensing_enable = 0; /* No VBUS Sensing on USB0 for HydraBus (VBUS is not connected on GPIOA9) */
 #else
   hpcd.Init.vbus_sensing_enable = 1;

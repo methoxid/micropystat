@@ -149,6 +149,26 @@ const pin_af_obj_t pin_A8_af[] = {
 
 const pin_obj_t pin_A8 = PIN(A, 8, 3, pin_A8_af, 0, 0);
 
+const pin_af_obj_t pin_A9_af[] = {
+  AF( 1, TIM     ,  1, CH2       , TIM1    ), // TIM1_CH2
+  //( 4, I2C     ,  3, SMBA      , I2C3    ), // I2C3_SMBA
+  AF( 7, USART   ,  1, TX        , USART1  ), // USART1_TX
+  //(13, DCMI    ,  0, D0        , DCMI    ), // DCMI_D0
+  //(15, EVENTOUT,  0,           , EVENTOUT), // EVENTOUT
+};
+
+const pin_obj_t pin_A9 = PIN(A, 9, 2, pin_A9_af, 0, 0);
+
+const pin_af_obj_t pin_A10_af[] = {
+  AF( 1, TIM     ,  1, CH3       , TIM1    ), // TIM1_CH3
+  AF( 7, USART   ,  1, RX        , USART1  ), // USART1_RX
+  //(10, OTG     ,  0, FS_ID     , OTG     ), // OTG_FS_ID
+  //(13, DCMI    ,  0, D1        , DCMI    ), // DCMI_D1
+  //(15, EVENTOUT,  0,           , EVENTOUT), // EVENTOUT
+};
+
+const pin_obj_t pin_A10 = PIN(A, 10, 2, pin_A10_af, 0, 0);
+
 // const pin_af_obj_t pin_A13_af[] = {
   //( 0, JTMS-SWDIO,  0,           , JTMS-SWDIO), // JTMS-SWDIO
   //(15, EVENTOUT,  0,           , EVENTOUT), // EVENTOUT
@@ -415,30 +435,6 @@ const pin_obj_t pin_C4 = PIN(C, 4, 0, NULL, PIN_ADC1 | PIN_ADC2 | PIN_ADC3, 14);
 
 const pin_obj_t pin_C5 = PIN(C, 5, 0, NULL, PIN_ADC1 | PIN_ADC2 | PIN_ADC3, 15);
 
-const pin_af_obj_t pin_C6_af[] = {
-  AF( 2, TIM     ,  3, CH1       , TIM3    ), // TIM3_CH1
-  AF( 3, TIM     ,  8, CH1       , TIM8    ), // TIM8_CH1
-  //( 5, I2S     ,  2, MCK       , I2S2    ), // I2S2_MCK
-  AF( 8, USART   ,  6, TX        , USART6  ), // USART6_TX
-  //(12, SDIO    ,  0, D6        , SDIO    ), // SDIO_D6
-  //(13, DCMI    ,  0, D0        , DCMI    ), // DCMI_D0
-  //(15, EVENTOUT,  0,           , EVENTOUT), // EVENTOUT
-};
-
-const pin_obj_t pin_C6 = PIN(C, 6, 3, pin_C6_af, 0, 0);
-
-const pin_af_obj_t pin_C7_af[] = {
-  AF( 2, TIM     ,  3, CH2       , TIM3    ), // TIM3_CH2
-  AF( 3, TIM     ,  8, CH2       , TIM8    ), // TIM8_CH2
-  //( 6, I2S     ,  3, MCK       , I2S3    ), // I2S3_MCK
-  AF( 8, USART   ,  6, RX        , USART6  ), // USART6_RX
-  //(12, SDIO    ,  0, D7        , SDIO    ), // SDIO_D7
-  //(13, DCMI    ,  0, D1        , DCMI    ), // DCMI_D1
-  //(15, EVENTOUT,  0,           , EVENTOUT), // EVENTOUT
-};
-
-const pin_obj_t pin_C7 = PIN(C, 7, 3, pin_C7_af, 0, 0);
-
 // const pin_af_obj_t pin_C13_af[] = {
   //(15, EVENTOUT,  0,           , EVENTOUT), // EVENTOUT
 // };
@@ -455,6 +451,8 @@ STATIC const mp_map_elem_t pin_cpu_pins_locals_dict_table[] = {
   { MP_OBJ_NEW_QSTR(MP_QSTR_A6), (mp_obj_t)&pin_A6 },
   { MP_OBJ_NEW_QSTR(MP_QSTR_A7), (mp_obj_t)&pin_A7 },
   { MP_OBJ_NEW_QSTR(MP_QSTR_A8), (mp_obj_t)&pin_A8 },
+  { MP_OBJ_NEW_QSTR(MP_QSTR_A9), (mp_obj_t)&pin_A9 },
+  { MP_OBJ_NEW_QSTR(MP_QSTR_A10), (mp_obj_t)&pin_A10 },
   { MP_OBJ_NEW_QSTR(MP_QSTR_A13), (mp_obj_t)&pin_A13 },
   { MP_OBJ_NEW_QSTR(MP_QSTR_A14), (mp_obj_t)&pin_A14 },
   { MP_OBJ_NEW_QSTR(MP_QSTR_A15), (mp_obj_t)&pin_A15 },
@@ -479,8 +477,6 @@ STATIC const mp_map_elem_t pin_cpu_pins_locals_dict_table[] = {
   { MP_OBJ_NEW_QSTR(MP_QSTR_C3), (mp_obj_t)&pin_C3 },
   { MP_OBJ_NEW_QSTR(MP_QSTR_C4), (mp_obj_t)&pin_C4 },
   { MP_OBJ_NEW_QSTR(MP_QSTR_C5), (mp_obj_t)&pin_C5 },
-  { MP_OBJ_NEW_QSTR(MP_QSTR_C6), (mp_obj_t)&pin_C6 },
-  { MP_OBJ_NEW_QSTR(MP_QSTR_C7), (mp_obj_t)&pin_C7 },
   { MP_OBJ_NEW_QSTR(MP_QSTR_C13), (mp_obj_t)&pin_C13 },
 };
 MP_DEFINE_CONST_DICT(pin_cpu_pins_locals_dict, pin_cpu_pins_locals_dict_table);
@@ -503,8 +499,8 @@ STATIC const mp_map_elem_t pin_board_pins_locals_dict_table[] = {
   { MP_OBJ_NEW_QSTR(MP_QSTR_CHR_CHG), (mp_obj_t)&pin_C1 },
   { MP_OBJ_NEW_QSTR(MP_QSTR_PWR_ANALOG), (mp_obj_t)&pin_C2 },
   { MP_OBJ_NEW_QSTR(MP_QSTR_BATT_ADC), (mp_obj_t)&pin_C3 },
-  { MP_OBJ_NEW_QSTR(MP_QSTR_MUX3A1), (mp_obj_t)&pin_C6 },
-  { MP_OBJ_NEW_QSTR(MP_QSTR_MUX3A0), (mp_obj_t)&pin_C7 },
+  { MP_OBJ_NEW_QSTR(MP_QSTR_MUX3A1), (mp_obj_t)&pin_A10 },
+  { MP_OBJ_NEW_QSTR(MP_QSTR_MUX3A0), (mp_obj_t)&pin_A9 },
   { MP_OBJ_NEW_QSTR(MP_QSTR_BTRST), (mp_obj_t)&pin_B8 },
   { MP_OBJ_NEW_QSTR(MP_QSTR_WIFIRST), (mp_obj_t)&pin_B9 },
   { MP_OBJ_NEW_QSTR(MP_QSTR_MUX1_A1), (mp_obj_t)&pin_B12 },

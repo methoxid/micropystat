@@ -48,6 +48,7 @@
 
 #define STM32F405xx
 #define USE_USB_FS
+#define USE_USB_OTG_ID  0
 
 /* ########################## Module Selection ############################## */
 /**
