@@ -31,12 +31,14 @@
   ******************************************************************************
   */
 
+#include <stdint.h>
+
 #include "usbd_cdc_msc_hid.h"
 #include "usbd_msc_storage.h"
 
-#include "misc.h"
+#include "py/misc.h"
+#include "lib/fatfs/diskio.h"
 #include "storage.h"
-#include "diskio.h"
 #include "sdcard.h"
 
 // These are needed to support removal of the medium, so that the USB drive

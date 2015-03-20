@@ -25,13 +25,9 @@
  */
 
 #include <stdio.h>
-#include <stdint.h>
 
-#include "mpconfig.h"
-#include "misc.h"
-#include "qstr.h"
-#include "lexer.h"
-#include "ff.h"
+#include "py/lexer.h"
+#include "lib/fatfs/ff.h"
 
 mp_import_stat_t mp_import_stat(const char *path) {
     FILINFO fno;

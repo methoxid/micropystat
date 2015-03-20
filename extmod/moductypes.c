@@ -27,14 +27,11 @@
 #include <assert.h>
 #include <string.h>
 #include <stdint.h>
-#include "mpconfig.h"
-#include "misc.h"
-#include "nlr.h"
-#include "qstr.h"
-#include "obj.h"
-#include "runtime.h"
-#include "objtuple.h"
-#include "binary.h"
+
+#include "py/nlr.h"
+#include "py/runtime.h"
+#include "py/objtuple.h"
+#include "py/binary.h"
 
 #if MICROPY_PY_UCTYPES
 
@@ -120,11 +117,12 @@ typedef struct _mp_obj_uctypes_struct_t {
     uint32_t flags;
 } mp_obj_uctypes_struct_t;
 
-STATIC NORETURN void syntax_error() {
+STATIC NORETURN void syntax_error(void) {
     nlr_raise(mp_obj_new_exception_msg(&mp_type_TypeError, "syntax error in uctypes descriptor"));
 }
 
 STATIC mp_obj_t uctypes_struct_make_new(mp_obj_t type_in, mp_uint_t n_args, mp_uint_t n_kw, const mp_obj_t *args) {
+    (void)n_kw;
     if (n_args < 2 || n_args > 3) {
         syntax_error();
     }
@@ -140,6 +138,7 @@ STATIC mp_obj_t uctypes_struct_make_new(mp_obj_t type_in, mp_uint_t n_args, mp_u
 }
 
 STATIC void uctypes_struct_print(void (*print)(void *env, const char *fmt, ...), void *env, mp_obj_t self_in, mp_print_kind_t kind) {
+    (void)kind;
     mp_obj_uctypes_struct_t *self = self_in;
     const char *typen = "unk";
     if (MP_OBJ_IS_TYPE(self->desc, &mp_type_dict)) {
@@ -559,7 +558,7 @@ STATIC mp_obj_t uctypes_struct_subscr(mp_obj_t self_in, mp_obj_t index_in, mp_ob
 /// \function addressof()
 /// Return address of object's data (applies to object providing buffer
 /// interface).
-mp_obj_t uctypes_struct_addressof(mp_obj_t buf) {
+STATIC mp_obj_t uctypes_struct_addressof(mp_obj_t buf) {
     mp_buffer_info_t bufinfo;
     mp_get_buffer_raise(buf, &bufinfo, MP_BUFFER_READ);
     return mp_obj_new_int((mp_int_t)bufinfo.buf);
@@ -570,8 +569,8 @@ MP_DEFINE_CONST_FUN_OBJ_1(uctypes_struct_addressof_obj, uctypes_struct_addressof
 /// Capture memory at given address of given size as bytearray. Memory is
 /// captured by reference (and thus memory pointed by bytearray may change
 /// or become invalid at later time). Use bytes_at() to capture by value.
-mp_obj_t uctypes_struct_bytearray_at(mp_obj_t ptr, mp_obj_t size) {
-    return mp_obj_new_bytearray_by_ref(mp_obj_int_get(size), (void*)mp_obj_int_get(ptr));
+STATIC mp_obj_t uctypes_struct_bytearray_at(mp_obj_t ptr, mp_obj_t size) {
+    return mp_obj_new_bytearray_by_ref(mp_obj_int_get_truncated(size), (void*)mp_obj_int_get_truncated(ptr));
 }
 MP_DEFINE_CONST_FUN_OBJ_2(uctypes_struct_bytearray_at_obj, uctypes_struct_bytearray_at);
 
@@ -579,8 +578,8 @@ MP_DEFINE_CONST_FUN_OBJ_2(uctypes_struct_bytearray_at_obj, uctypes_struct_bytear
 /// Capture memory at given address of given size as bytes. Memory is
 /// captured by value, i.e. copied. Use bytearray_at() to capture by reference
 /// ("zero copy").
-mp_obj_t uctypes_struct_bytes_at(mp_obj_t ptr, mp_obj_t size) {
-    return mp_obj_new_bytes((void*)mp_obj_int_get(ptr), mp_obj_int_get(size));
+STATIC mp_obj_t uctypes_struct_bytes_at(mp_obj_t ptr, mp_obj_t size) {
+    return mp_obj_new_bytes((void*)mp_obj_int_get_truncated(ptr), mp_obj_int_get_truncated(size));
 }
 MP_DEFINE_CONST_FUN_OBJ_2(uctypes_struct_bytes_at_obj, uctypes_struct_bytes_at);
 
@@ -649,16 +648,7 @@ STATIC const mp_map_elem_t mp_module_uctypes_globals_table[] = {
     { MP_OBJ_NEW_QSTR(MP_QSTR_ARRAY), MP_OBJ_NEW_SMALL_INT(TYPE2SMALLINT(ARRAY, AGG_TYPE_BITS)) },
 };
 
-STATIC const mp_obj_dict_t mp_module_uctypes_globals = {
-    .base = {&mp_type_dict},
-    .map = {
-        .all_keys_are_qstrs = 1,
-        .table_is_fixed_array = 1,
-        .used = MP_ARRAY_SIZE(mp_module_uctypes_globals_table),
-        .alloc = MP_ARRAY_SIZE(mp_module_uctypes_globals_table),
-        .table = (mp_map_elem_t*)mp_module_uctypes_globals_table,
-    },
-};
+STATIC MP_DEFINE_CONST_DICT(mp_module_uctypes_globals, mp_module_uctypes_globals_table);
 
 const mp_obj_module_t mp_module_uctypes = {
     .base = { &mp_type_module },

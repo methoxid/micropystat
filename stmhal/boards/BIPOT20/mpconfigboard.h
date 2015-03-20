@@ -45,6 +45,6 @@
 #define MICROPY_HW_LED_OFF(pin)     (pin->gpio->BSRRH = pin->pin_mask) // BSRRH = reverse logic
 
 // SD card detect switch
-#define MICROPY_HW_SDCARD_DETECT_PIN        (pin_A4)
-#define MICROPY_HW_SDCARD_DETECT_PULL       (GPIO_PULLUP)
+#define MICROPY_HW_SDCARD_DETECT_PIN        (pin_C5)  // was pin_A4 floating ...
+#define MICROPY_HW_SDCARD_DETECT_PULL       (GPIO_PULLUP) // was GPIO_PULLUP
 #define MICROPY_HW_SDCARD_DETECT_PRESENT    (GPIO_PIN_RESET)

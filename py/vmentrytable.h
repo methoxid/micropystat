@@ -28,7 +28,7 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Winitializer-overrides"
 #endif // __clang__
- 
+
 static void* entry_table[256] = {
     [0 ... 255] = &&entry_default,
     [MP_BC_LOAD_CONST_FALSE] = &&entry_MP_BC_LOAD_CONST_FALSE,
@@ -36,10 +36,9 @@ static void* entry_table[256] = {
     [MP_BC_LOAD_CONST_TRUE] = &&entry_MP_BC_LOAD_CONST_TRUE,
     [MP_BC_LOAD_CONST_ELLIPSIS] = &&entry_MP_BC_LOAD_CONST_ELLIPSIS,
     [MP_BC_LOAD_CONST_SMALL_INT] = &&entry_MP_BC_LOAD_CONST_SMALL_INT,
-    [MP_BC_LOAD_CONST_INT] = &&entry_MP_BC_LOAD_CONST_INT,
-    [MP_BC_LOAD_CONST_DEC] = &&entry_MP_BC_LOAD_CONST_DEC,
     [MP_BC_LOAD_CONST_BYTES] = &&entry_MP_BC_LOAD_CONST_BYTES,
     [MP_BC_LOAD_CONST_STRING] = &&entry_MP_BC_LOAD_CONST_STRING,
+    [MP_BC_LOAD_CONST_OBJ] = &&entry_MP_BC_LOAD_CONST_OBJ,
     [MP_BC_LOAD_NULL] = &&entry_MP_BC_LOAD_NULL,
     [MP_BC_LOAD_FAST_N] = &&entry_MP_BC_LOAD_FAST_N,
     [MP_BC_LOAD_DEREF] = &&entry_MP_BC_LOAD_DEREF,
@@ -86,9 +85,13 @@ static void* entry_table[256] = {
     [MP_BC_BUILD_MAP] = &&entry_MP_BC_BUILD_MAP,
     [MP_BC_STORE_MAP] = &&entry_MP_BC_STORE_MAP,
     [MP_BC_MAP_ADD] = &&entry_MP_BC_MAP_ADD,
+    #if MICROPY_PY_BUILTINS_SET
     [MP_BC_BUILD_SET] = &&entry_MP_BC_BUILD_SET,
     [MP_BC_SET_ADD] = &&entry_MP_BC_SET_ADD,
+    #endif
+    #if MICROPY_PY_BUILTINS_SLICE
     [MP_BC_BUILD_SLICE] = &&entry_MP_BC_BUILD_SLICE,
+    #endif
     [MP_BC_UNPACK_SEQUENCE] = &&entry_MP_BC_UNPACK_SEQUENCE,
     [MP_BC_UNPACK_EX] = &&entry_MP_BC_UNPACK_EX,
     [MP_BC_MAKE_FUNCTION] = &&entry_MP_BC_MAKE_FUNCTION,

@@ -24,16 +24,10 @@
  * THE SOFTWARE.
  */
 
-#include <unistd.h>
-
-#include "mpconfig.h"
-#include "misc.h"
-#include "nlr.h"
-#include "qstr.h"
-#include "obj.h"
-#include "objlist.h"
-#include "runtime0.h"
-#include "runtime.h"
+#include "py/nlr.h"
+#include "py/objlist.h"
+#include "py/runtime0.h"
+#include "py/runtime.h"
 
 #if MICROPY_PY_UHEAPQ
 
@@ -118,16 +112,7 @@ STATIC const mp_map_elem_t mp_module_uheapq_globals_table[] = {
     { MP_OBJ_NEW_QSTR(MP_QSTR_heapify), (mp_obj_t)&mod_uheapq_heapify_obj },
 };
 
-STATIC const mp_obj_dict_t mp_module_uheapq_globals = {
-    .base = {&mp_type_dict},
-    .map = {
-        .all_keys_are_qstrs = 1,
-        .table_is_fixed_array = 1,
-        .used = MP_ARRAY_SIZE(mp_module_uheapq_globals_table),
-        .alloc = MP_ARRAY_SIZE(mp_module_uheapq_globals_table),
-        .table = (mp_map_elem_t*)mp_module_uheapq_globals_table,
-    },
-};
+STATIC MP_DEFINE_CONST_DICT(mp_module_uheapq_globals, mp_module_uheapq_globals_table);
 
 const mp_obj_module_t mp_module_uheapq = {
     .base = { &mp_type_module },

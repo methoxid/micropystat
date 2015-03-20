@@ -23,6 +23,13 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+#ifndef __MICROPY_INCLUDED_PY_GC_H__
+#define __MICROPY_INCLUDED_PY_GC_H__
+
+#include <stdint.h>
+
+#include "py/mpconfig.h"
+#include "py/misc.h"
 
 void gc_init(void *start, void *end);
 
@@ -31,11 +38,6 @@ void gc_init(void *start, void *end);
 void gc_lock(void);
 void gc_unlock(void);
 bool gc_is_locked(void);
-
-// This variable controls auto garbage collection.  If set to 0 then the
-// GC won't automatically run when gc_alloc can't find enough blocks.  But
-// you can still allocate/free memory and also explicitly call gc_collect.
-extern uint16_t gc_auto_collect_enabled;
 
 // A given port must implement gc_collect by using the other collect functions.
 void gc_collect(void);
@@ -60,3 +62,5 @@ typedef struct _gc_info_t {
 void gc_info(gc_info_t *info);
 void gc_dump_info(void);
 void gc_dump_alloc_table(void);
+
+#endif // __MICROPY_INCLUDED_PY_GC_H__

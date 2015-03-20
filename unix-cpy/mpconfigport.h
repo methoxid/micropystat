@@ -27,6 +27,7 @@
 // options to control how Micro Python is built
 
 #define MICROPY_EMIT_CPYTHON        (1)
+#define MICROPY_COMP_TRIPLE_TUPLE_ASSIGN (1)
 #define MICROPY_HELPER_LEXER_UNIX   (1)
 #define MICROPY_FLOAT_IMPL          (MICROPY_FLOAT_IMPL_DOUBLE)
 #define MICROPY_PY_IO               (0)
@@ -48,6 +49,7 @@ typedef unsigned int mp_uint_t; // must be pointer size
 typedef void *machine_ptr_t; // must be of pointer size
 typedef const void *machine_const_ptr_t; // must be of pointer size
 typedef double machine_float_t;
+typedef long mp_off_t;
 
 // We need to provide a declaration/definition of alloca()
 #ifdef __FreeBSD__

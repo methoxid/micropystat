@@ -25,20 +25,17 @@
  */
 
 #include <stdio.h>
-#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "mpconfig.h"
-#include "nlr.h"
-#include "misc.h"
-#include "qstr.h"
-#include "obj.h"
+#include "py/nlr.h"
+#include "py/obj.h"
 #include "input.h"
 
 #if MICROPY_USE_READLINE
 #include <readline/readline.h>
 #include <readline/history.h>
+#include <readline/tilde.h>
 #endif
 
 char *prompt(char *p) {
@@ -64,6 +61,18 @@ char *prompt(char *p) {
     memcpy(line, buf, l);
 #endif
     return line;
+}
+
+void prompt_read_history(void) {
+#if MICROPY_USE_READLINE_HISTORY
+    read_history(tilde_expand("~/.micropython.history"));
+#endif
+}
+
+void prompt_write_history(void) {
+#if MICROPY_USE_READLINE_HISTORY
+    write_history(tilde_expand("~/.micropython.history"));
+#endif
 }
 
 STATIC mp_obj_t mp_builtin_input(uint n_args, const mp_obj_t *args) {

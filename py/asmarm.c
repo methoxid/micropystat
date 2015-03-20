@@ -29,12 +29,12 @@
 #include <assert.h>
 #include <string.h>
 
-#include "mpconfig.h"
-#include "misc.h"
-#include "asmarm.h"
+#include "py/mpconfig.h"
 
 // wrapper around everything in this file
 #if MICROPY_EMIT_ARM
+
+#include "py/asmarm.h"
 
 #define SIGNED_FIT24(x) (((x) & 0xff800000) == 0) || (((x) & 0xff000000) == 0xff000000)
 
@@ -70,20 +70,20 @@ void asm_arm_free(asm_arm_t *as, bool free_code) {
 }
 
 void asm_arm_start_pass(asm_arm_t *as, uint pass) {
-    as->pass = pass;
-    as->code_offset = 0;
     if (pass == ASM_ARM_PASS_COMPUTE) {
         memset(as->label_offsets, -1, as->max_num_labels * sizeof(mp_uint_t));
+    } else if (pass == ASM_ARM_PASS_EMIT) {
+        MP_PLAT_ALLOC_EXEC(as->code_offset, (void**)&as->code_base, &as->code_size);
+        if (as->code_base == NULL) {
+            assert(0);
+        }
     }
+    as->pass = pass;
+    as->code_offset = 0;
 }
 
 void asm_arm_end_pass(asm_arm_t *as) {
-    if (as->pass == ASM_ARM_PASS_COMPUTE) {
-        MP_PLAT_ALLOC_EXEC(as->code_offset, (void**) &as->code_base, &as->code_size);
-        if(as->code_base == NULL) {
-            assert(0);
-        }
-    } else if(as->pass == ASM_ARM_PASS_EMIT) {
+    if (as->pass == ASM_ARM_PASS_EMIT) {
 #ifdef __arm__
         // flush I- and D-cache
         asm volatile(
@@ -282,8 +282,9 @@ void asm_arm_mov_reg_i32(asm_arm_t *as, uint rd, int imm) {
     // TODO: There are more variants of immediate values
     if ((imm & 0xFF) == imm) {
         emit_al(as, asm_arm_op_mov_imm(rd, imm));
-    } else if (imm < 0 && ((-imm) & 0xFF) == -imm) {
-        emit_al(as, asm_arm_op_mvn_imm(rd, -imm));
+    } else if (imm < 0 && imm >= -256) {
+        // mvn is "move not", not "move negative"
+        emit_al(as, asm_arm_op_mvn_imm(rd, ~imm));
     } else {
         //Insert immediate into code and jump over it
         emit_al(as, 0x59f0000 | (rd << 12)); // ldr rd, [pc]

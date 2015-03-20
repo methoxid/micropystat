@@ -1,4 +1,5 @@
-"""NRF24L01 driver for Micro Python"""
+"""NRF24L01 driver for Micro Python
+"""
 
 import pyb
 
@@ -10,7 +11,6 @@ SETUP_RETR  = const(0x04)
 RF_CH       = const(0x05)
 RF_SETUP    = const(0x06)
 STATUS      = const(0x07)
-OBSERVE_TX  = const(0x08)
 RX_ADDR_P0  = const(0x0a)
 TX_ADDR     = const(0x10)
 RX_PW_P0    = const(0x11)
@@ -69,8 +69,10 @@ class NRF24L01:
         self.pipe0_read_addr = None
         pyb.delay(5)
 
-        # set address width to 5 bytes
+        # set address width to 5 bytes and check for device present
         self.reg_write(SETUP_AW, 0b11)
+        if self.reg_read(SETUP_AW) != 0b11:
+            raise OSError("nRF24L01+ Hardware not responding")
 
         # disable dynamic payloads
         self.reg_write(DYNPD, 0)
@@ -80,7 +82,7 @@ class NRF24L01:
         self.reg_write(SETUP_RETR, (6 << 4) | 8)
 
         # set rf power and speed
-        self.set_power_speed(POWER_3, SPEED_1M)
+        self.set_power_speed(POWER_3, SPEED_250K) # Best for point to point links
 
         # init CRC
         self.set_crc(2)
@@ -101,13 +103,6 @@ class NRF24L01:
         buf = self.spi.recv(1)
         self.cs.high()
         return buf[0]
-
-    def reg_read_ret_status(self, reg):
-        self.cs.low()
-        status = self.spi.send_recv(reg)[0]
-        buf = self.spi.recv(1)
-        self.cs.high()
-        return status
 
     def reg_write(self, reg, buf):
         self.cs.low()
@@ -143,7 +138,7 @@ class NRF24L01:
         self.reg_write(CONFIG, config)
 
     def set_channel(self, channel):
-        self.reg_write(RF_CH, min(channel, 127))
+        self.reg_write(RF_CH, min(channel, 125))
 
     # address should be a bytes object 5 bytes long
     def open_tx_pipe(self, address):
@@ -194,17 +189,26 @@ class NRF24L01:
         self.spi.send(R_RX_PAYLOAD)
         buf = self.spi.recv(self.payload_size)
         self.cs.high()
-
         # clear RX ready flag
         self.reg_write(STATUS, RX_DR)
 
         return buf
 
+    # blocking wait for tx complete
     def send(self, buf, timeout=500):
+        send_nonblock = self.send_start(buf)
+        start = pyb.millis()
+        result = None
+        while result is None and pyb.elapsed_millis(start) < timeout:
+            result = self.send_done() # 1 == success, 2 == fail
+        if result == 2:
+            raise OSError("send failed")
+
+    # non-blocking tx
+    def send_start(self, buf):
         # power up
         self.reg_write(CONFIG, (self.reg_read(CONFIG) | PWR_UP) & ~PRIM_RX)
         pyb.udelay(150)
-
         # send the data
         self.cs.low()
         self.spi.send(W_TX_PAYLOAD)
@@ -218,17 +222,12 @@ class NRF24L01:
         pyb.udelay(15) # needs to be >10us
         self.ce.low()
 
-        # blocking wait for tx complete
-        start = pyb.millis()
-        while pyb.millis() - start < timeout:
-            status = self.reg_read_ret_status(OBSERVE_TX)
-            if status & (TX_DS | MAX_RT):
-                break
+    # returns None if send still in progress, 1 for success, 2 for fail
+    def send_done(self):
+        if not (self.reg_read(STATUS) & (TX_DS | MAX_RT)):
+            return None # tx not finished
 
-        # get and clear all status flags
+        # either finished or failed: get and clear status flags, power down
         status = self.reg_write(STATUS, RX_DR | TX_DS | MAX_RT)
-        if not (status & TX_DS):
-            raise OSError("send failed")
-
-        # power down
         self.reg_write(CONFIG, self.reg_read(CONFIG) & ~PWR_UP)
+        return 1 if status & TX_DS else 2

@@ -30,14 +30,10 @@
 #include <string.h>
 #include <assert.h>
 
-#include "mpconfig.h"
-#include "nlr.h"
-#include "misc.h"
-#include "qstr.h"
-#include "obj.h"
-#include "runtime0.h"
-#include "runtime.h"
-#include "objtype.h"
+#include "py/nlr.h"
+#include "py/objtype.h"
+#include "py/runtime0.h"
+#include "py/runtime.h"
 
 #if 0 // print debugging info
 #define DEBUG_PRINT (1)
@@ -79,10 +75,10 @@ STATIC int instance_count_native_bases(const mp_obj_type_t *type, const mp_obj_t
             continue;
         }
         if (is_native_type(bt)) {
-            *last_native_base = items[i];
+            *last_native_base = bt;
             count++;
         } else {
-            count += instance_count_native_bases(items[i], last_native_base);
+            count += instance_count_native_bases(bt, last_native_base);
         }
     }
 
@@ -94,13 +90,15 @@ STATIC int instance_count_native_bases(const mp_obj_type_t *type, const mp_obj_t
 // http://python-history.blogspot.com/2010/06/method-resolution-order.html
 // https://www.python.org/download/releases/2.3/mro/
 //
-// will return MP_OBJ_NULL if not found
-// will return MP_OBJ_SENTINEL if special method was found in a native type base
-// via slot id (meth_offset). As there can be only one native base, it's known that it
-// applies to instance->subobj[0]. In most cases, we also don't need to know which type
-// it was - because instance->subobj[0] is of that type. The only exception is when
-// object is not yet constructed, then we need to know base native type to construct
-// instance->subobj[0]. This case is handled via instance_count_native_bases() though.
+// will keep lookup->dest[0]'s value (should be MP_OBJ_NULL on invocation) if attribute
+// is not found
+// will set lookup->dest[0] to MP_OBJ_SENTINEL if special method was found in a native
+// type base via slot id (as specified by lookup->meth_offset). As there can be only one
+// native base, it's known that it applies to instance->subobj[0]. In most cases, we also
+// don't need to know which type it was - because instance->subobj[0] is of that type.
+// The only exception is when object is not yet constructed, then we need to know base
+// native type to construct its instance->subobj[0] from. But this case is handled via
+// instance_count_native_bases(), which returns a native base which it saw.
 struct class_lookup_data {
     mp_obj_instance_t *obj;
     qstr attr;
@@ -137,10 +135,13 @@ STATIC void mp_obj_class_lookup(struct class_lookup_data  *lookup, const mp_obj_
                     // not type where we found a class method.
                     const mp_obj_type_t *org_type = (const mp_obj_type_t*)lookup->obj;
                     instance_convert_return_attr(NULL, org_type, elem->value, lookup->dest);
-                } else if (lookup->obj != MP_OBJ_NULL && !lookup->is_type && is_native_type(type)) {
-                    instance_convert_return_attr(lookup->obj->subobj[0], type, elem->value, lookup->dest);
                 } else {
-                    instance_convert_return_attr(lookup->obj, type, elem->value, lookup->dest);
+                    mp_obj_instance_t *obj = lookup->obj;
+                    if (obj != MP_OBJ_NULL && is_native_type(type) && type != &mp_type_object /* object is not a real type */) {
+                        // If we're dealing with native base class, then it applies to native sub-object
+                        obj = obj->subobj[0];
+                    }
+                    instance_convert_return_attr(obj, type, elem->value, lookup->dest);
                 }
 #if DEBUG_PRINT
                 printf("mp_obj_class_lookup: Returning: ");
@@ -151,9 +152,10 @@ STATIC void mp_obj_class_lookup(struct class_lookup_data  *lookup, const mp_obj_
             }
         }
 
-        // Try this for completeness, but all native methods should be statically defined
-        // in locals_dict, and would be handled by above.
-        if (lookup->obj != MP_OBJ_NULL && !lookup->is_type && is_native_type(type)) {
+        // Previous code block takes care about attributes defined in .locals_dict,
+        // but some attributes of native types may be handled using .load_attr method,
+        // so make sure we try to lookup those too.
+        if (lookup->obj != MP_OBJ_NULL && !lookup->is_type && is_native_type(type) && type != &mp_type_object /* object is not a real type */) {
             mp_load_method_maybe(lookup->obj->subobj[0], lookup->attr, lookup->dest);
             if (lookup->dest[0] != MP_OBJ_NULL) {
                 return;
@@ -313,7 +315,13 @@ mp_obj_t instance_make_new(mp_obj_t self_in, mp_uint_t n_args, mp_uint_t n_kw, c
             m_del(mp_obj_t, args2, 2 + n_args + 2 * n_kw);
         }
         if (init_ret != mp_const_none) {
-            nlr_raise(mp_obj_new_exception_msg_varg(&mp_type_TypeError, "__init__() should return None, not '%s'", mp_obj_get_type_str(init_ret)));
+            if (MICROPY_ERROR_REPORTING == MICROPY_ERROR_REPORTING_TERSE) {
+                nlr_raise(mp_obj_new_exception_msg(&mp_type_TypeError,
+                    "__init__() should return None"));
+            } else {
+                nlr_raise(mp_obj_new_exception_msg_varg(&mp_type_TypeError,
+                    "__init__() should return None, not '%s'", mp_obj_get_type_str(init_ret)));
+            }
         }
 
     }
@@ -321,7 +329,7 @@ mp_obj_t instance_make_new(mp_obj_t self_in, mp_uint_t n_args, mp_uint_t n_kw, c
     return o;
 }
 
-STATIC const qstr unary_op_method_name[] = {
+const qstr mp_unary_op_method_name[] = {
     [MP_UNARY_OP_BOOL] = MP_QSTR___bool__,
     [MP_UNARY_OP_LEN] = MP_QSTR___len__,
     //[MP_UNARY_OP_POSITIVE,
@@ -332,7 +340,7 @@ STATIC const qstr unary_op_method_name[] = {
 
 STATIC mp_obj_t instance_unary_op(mp_uint_t op, mp_obj_t self_in) {
     mp_obj_instance_t *self = self_in;
-    qstr op_name = unary_op_method_name[op];
+    qstr op_name = mp_unary_op_method_name[op];
     /* Still try to lookup native slot
     if (op_name == 0) {
         return MP_OBJ_NULL;
@@ -356,7 +364,7 @@ STATIC mp_obj_t instance_unary_op(mp_uint_t op, mp_obj_t self_in) {
     }
 }
 
-STATIC const qstr binary_op_method_name[] = {
+const qstr mp_binary_op_method_name[] = {
     /*
     MP_BINARY_OP_OR,
     MP_BINARY_OP_XOR,
@@ -366,20 +374,24 @@ STATIC const qstr binary_op_method_name[] = {
     */
     [MP_BINARY_OP_ADD] = MP_QSTR___add__,
     [MP_BINARY_OP_SUBTRACT] = MP_QSTR___sub__,
+    #if MICROPY_PY_ALL_SPECIAL_METHODS
+    [MP_BINARY_OP_MULTIPLY] = MP_QSTR___mul__,
+    [MP_BINARY_OP_FLOOR_DIVIDE] = MP_QSTR___floordiv__,
+    [MP_BINARY_OP_TRUE_DIVIDE] = MP_QSTR___truediv__,
+    #endif
     /*
-    MP_BINARY_OP_MULTIPLY,
-    MP_BINARY_OP_FLOOR_DIVIDE,
-    MP_BINARY_OP_TRUE_DIVIDE,
     MP_BINARY_OP_MODULO,
     MP_BINARY_OP_POWER,
     MP_BINARY_OP_INPLACE_OR,
     MP_BINARY_OP_INPLACE_XOR,
     MP_BINARY_OP_INPLACE_AND,
     MP_BINARY_OP_INPLACE_LSHIFT,
-    MP_BINARY_OP_INPLACE_RSHIFT,
-    MP_BINARY_OP_INPLACE_ADD,
-    MP_BINARY_OP_INPLACE_SUBTRACT,
-    MP_BINARY_OP_INPLACE_MULTIPLY,
+    MP_BINARY_OP_INPLACE_RSHIFT,*/
+    #if MICROPY_PY_ALL_SPECIAL_METHODS
+    [MP_BINARY_OP_INPLACE_ADD] = MP_QSTR___iadd__,
+    [MP_BINARY_OP_INPLACE_SUBTRACT] = MP_QSTR___isub__,
+    #endif
+    /*MP_BINARY_OP_INPLACE_MULTIPLY,
     MP_BINARY_OP_INPLACE_FLOOR_DIVIDE,
     MP_BINARY_OP_INPLACE_TRUE_DIVIDE,
     MP_BINARY_OP_INPLACE_MODULO,
@@ -429,7 +441,7 @@ STATIC mp_obj_t instance_binary_op(mp_uint_t op, mp_obj_t lhs_in, mp_obj_t rhs_i
     // Note: For ducktyping, CPython does not look in the instance members or use
     // __getattr__ or __getattribute__.  It only looks in the class dictionary.
     mp_obj_instance_t *lhs = lhs_in;
-    qstr op_name = binary_op_method_name[op];
+    qstr op_name = mp_binary_op_method_name[op];
     /* Still try to lookup native slot
     if (op_name == 0) {
         return MP_OBJ_NULL;
@@ -454,8 +466,8 @@ STATIC mp_obj_t instance_binary_op(mp_uint_t op, mp_obj_t lhs_in, mp_obj_t rhs_i
     }
 }
 
-STATIC void instance_load_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
-    // logic: look in obj members then class locals (TODO check this against CPython)
+void mp_obj_instance_load_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
+    // logic: look in instance members then class locals
     assert(is_instance_type(mp_obj_get_type(self_in)));
     mp_obj_instance_t *self = self_in;
 
@@ -508,7 +520,7 @@ STATIC void instance_load_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
     }
 }
 
-STATIC bool instance_store_attr(mp_obj_t self_in, qstr attr, mp_obj_t value) {
+bool mp_obj_instance_store_attr(mp_obj_t self_in, qstr attr, mp_obj_t value) {
     mp_obj_instance_t *self = self_in;
 
 #if MICROPY_PY_BUILTINS_PROPERTY
@@ -591,21 +603,7 @@ STATIC mp_obj_t instance_subscr(mp_obj_t self_in, mp_obj_t index, mp_obj_t value
     }
 }
 
-bool mp_obj_instance_is_callable(mp_obj_t self_in) {
-    mp_obj_instance_t *self = self_in;
-    mp_obj_t member[2] = {MP_OBJ_NULL};
-    struct class_lookup_data lookup = {
-        .obj = self,
-        .attr = MP_QSTR___call__,
-        .meth_offset = offsetof(mp_obj_type_t, call),
-        .dest = member,
-        .is_type = false,
-    };
-    mp_obj_class_lookup(&lookup, self->base.type);
-    return member[0] != MP_OBJ_NULL;
-}
-
-mp_obj_t mp_obj_instance_call(mp_obj_t self_in, mp_uint_t n_args, mp_uint_t n_kw, const mp_obj_t *args) {
+STATIC mp_obj_t mp_obj_instance_get_call(mp_obj_t self_in) {
     mp_obj_instance_t *self = self_in;
     mp_obj_t member[2] = {MP_OBJ_NULL, MP_OBJ_NULL};
     struct class_lookup_data lookup = {
@@ -616,13 +614,29 @@ mp_obj_t mp_obj_instance_call(mp_obj_t self_in, mp_uint_t n_args, mp_uint_t n_kw
         .is_type = false,
     };
     mp_obj_class_lookup(&lookup, self->base.type);
-    if (member[0] == MP_OBJ_NULL) {
-        nlr_raise(mp_obj_new_exception_msg_varg(&mp_type_TypeError, "'%s' object is not callable", mp_obj_get_type_str(self_in)));
+    return member[0];
+}
+
+bool mp_obj_instance_is_callable(mp_obj_t self_in) {
+    return mp_obj_instance_get_call(self_in) != MP_OBJ_NULL;
+}
+
+mp_obj_t mp_obj_instance_call(mp_obj_t self_in, mp_uint_t n_args, mp_uint_t n_kw, const mp_obj_t *args) {
+    mp_obj_t call = mp_obj_instance_get_call(self_in);
+    if (call == MP_OBJ_NULL) {
+        if (MICROPY_ERROR_REPORTING == MICROPY_ERROR_REPORTING_TERSE) {
+            nlr_raise(mp_obj_new_exception_msg(&mp_type_TypeError,
+                "object not callable"));
+        } else {
+            nlr_raise(mp_obj_new_exception_msg_varg(&mp_type_TypeError,
+                "'%s' object is not callable", mp_obj_get_type_str(self_in)));
+        }
     }
-    if (member[0] == MP_OBJ_SENTINEL) {
+    mp_obj_instance_t *self = self_in;
+    if (call == MP_OBJ_SENTINEL) {
         return mp_call_function_n_kw(self->subobj[0], n_args, n_kw, args);
     }
-    mp_obj_t meth = mp_obj_new_bound_meth(member[0], self);
+    mp_obj_t meth = mp_obj_new_bound_meth(call, self);
     return mp_call_function_n_kw(meth, n_args, n_kw, args);
 }
 
@@ -638,22 +652,32 @@ STATIC mp_obj_t instance_getiter(mp_obj_t self_in) {
     };
     mp_obj_class_lookup(&lookup, self->base.type);
     if (member[0] == MP_OBJ_NULL) {
-        // This kinda duplicates code in mp_getiter()
-        lookup.attr = MP_QSTR___getitem__;
-        lookup.meth_offset = 0; // TODO
-        mp_obj_class_lookup(&lookup, self->base.type);
-        if (member[0] != MP_OBJ_NULL) {
-            // __getitem__ exists, create an iterator
-            return mp_obj_new_getitem_iter(member);
-        }
         return MP_OBJ_NULL;
-    }
-    if (member[0] == MP_OBJ_SENTINEL) {
+    } else if (member[0] == MP_OBJ_SENTINEL) {
         mp_obj_type_t *type = mp_obj_get_type(self->subobj[0]);
         return type->getiter(self->subobj[0]);
+    } else {
+        return mp_call_method_n_kw(0, 0, member);
     }
-    mp_obj_t meth = mp_obj_new_bound_meth(member[0], self);
-    return mp_call_function_n_kw(meth, 0, 0, NULL);
+}
+
+STATIC mp_int_t instance_get_buffer(mp_obj_t self_in, mp_buffer_info_t *bufinfo, mp_uint_t flags) {
+    mp_obj_instance_t *self = self_in;
+    mp_obj_t member[2] = {MP_OBJ_NULL};
+    struct class_lookup_data lookup = {
+        .obj = self,
+        .attr = MP_QSTR_, // don't actually look for a method
+        .meth_offset = offsetof(mp_obj_type_t, buffer_p.get_buffer),
+        .dest = member,
+        .is_type = false,
+    };
+    mp_obj_class_lookup(&lookup, self->base.type);
+    if (member[0] == MP_OBJ_SENTINEL) {
+        mp_obj_type_t *type = mp_obj_get_type(self->subobj[0]);
+        return type->buffer_p.get_buffer(self->subobj[0], bufinfo, flags);
+    } else {
+        return 1; // object does not support buffer protocol
+    }
 }
 
 /******************************************************************************/
@@ -663,11 +687,14 @@ STATIC mp_obj_t instance_getiter(mp_obj_t self_in) {
 //  - creating a new class (a new type) creates a new mp_obj_type_t
 
 STATIC void type_print(void (*print)(void *env, const char *fmt, ...), void *env, mp_obj_t self_in, mp_print_kind_t kind) {
+    (void)kind;
     mp_obj_type_t *self = self_in;
     print(env, "<class '%s'>", qstr_str(self->name));
 }
 
 STATIC mp_obj_t type_make_new(mp_obj_t type_in, mp_uint_t n_args, mp_uint_t n_kw, const mp_obj_t *args) {
+    (void)type_in;
+
     mp_arg_check_num(n_args, n_kw, 1, 3, false);
 
     switch (n_args) {
@@ -691,7 +718,12 @@ STATIC mp_obj_t type_call(mp_obj_t self_in, mp_uint_t n_args, mp_uint_t n_kw, co
     mp_obj_type_t *self = self_in;
 
     if (self->make_new == NULL) {
-        nlr_raise(mp_obj_new_exception_msg_varg(&mp_type_TypeError, "cannot create '%s' instances", qstr_str(self->name)));
+        if (MICROPY_ERROR_REPORTING == MICROPY_ERROR_REPORTING_TERSE) {
+            nlr_raise(mp_obj_new_exception_msg(&mp_type_TypeError, "cannot create instance"));
+        } else {
+            nlr_raise(mp_obj_new_exception_msg_varg(&mp_type_TypeError,
+                "cannot create '%s' instances", qstr_str(self->name)));
+        }
     }
 
     // make new instance
@@ -749,18 +781,6 @@ STATIC bool type_store_attr(mp_obj_t self_in, qstr attr, mp_obj_t value) {
     return false;
 }
 
-STATIC mp_obj_t type_binary_op(mp_uint_t op, mp_obj_t lhs_in, mp_obj_t rhs_in) {
-    switch (op) {
-        case MP_BINARY_OP_EQUAL:
-            // Types can be equal only if it's the same type structure,
-            // we don't even need to check for 2nd arg type.
-            return MP_BOOL(lhs_in == rhs_in);
-
-        default:
-            return MP_OBJ_NULL; // op not supported
-    }
-}
-
 const mp_obj_type_t mp_type_type = {
     { &mp_type_type },
     .name = MP_QSTR_type,
@@ -769,7 +789,6 @@ const mp_obj_type_t mp_type_type = {
     .call = type_call,
     .load_attr = type_load_attr,
     .store_attr = type_store_attr,
-    .binary_op = type_binary_op,
 };
 
 mp_obj_t mp_obj_new_type(qstr name, mp_obj_t bases_tuple, mp_obj_t locals_dict) {
@@ -787,7 +806,13 @@ mp_obj_t mp_obj_new_type(qstr name, mp_obj_t bases_tuple, mp_obj_t locals_dict) 
         mp_obj_type_t *t = items[i];
         // TODO: Verify with CPy, tested on function type
         if (t->make_new == NULL) {
-            nlr_raise(mp_obj_new_exception_msg_varg(&mp_type_TypeError, "type '%s' is not an acceptable base type", qstr_str(t->name)));
+            if (MICROPY_ERROR_REPORTING == MICROPY_ERROR_REPORTING_TERSE) {
+                nlr_raise(mp_obj_new_exception_msg(&mp_type_TypeError,
+                    "type is not an acceptable base type"));
+            } else {
+                nlr_raise(mp_obj_new_exception_msg_varg(&mp_type_TypeError,
+                    "type '%s' is not an acceptable base type", qstr_str(t->name)));
+            }
         }
     }
 
@@ -796,13 +821,16 @@ mp_obj_t mp_obj_new_type(qstr name, mp_obj_t bases_tuple, mp_obj_t locals_dict) 
     o->name = name;
     o->print = instance_print;
     o->make_new = instance_make_new;
+    o->call = mp_obj_instance_call;
     o->unary_op = instance_unary_op;
     o->binary_op = instance_binary_op;
-    o->load_attr = instance_load_attr;
-    o->store_attr = instance_store_attr;
+    o->load_attr = mp_obj_instance_load_attr;
+    o->store_attr = mp_obj_instance_store_attr;
     o->subscr = instance_subscr;
-    o->call = mp_obj_instance_call;
     o->getiter = instance_getiter;
+    //o->iternext = ; not implemented
+    o->buffer_p.get_buffer = instance_get_buffer;
+    //o->stream_p = ; not implemented
     o->bases_tuple = bases_tuple;
     o->locals_dict = locals_dict;
 
@@ -835,6 +863,7 @@ typedef struct _mp_obj_super_t {
 } mp_obj_super_t;
 
 STATIC void super_print(void (*print)(void *env, const char *fmt, ...), void *env, mp_obj_t self_in, mp_print_kind_t kind) {
+    (void)kind;
     mp_obj_super_t *self = self_in;
     print(env, "<super: ");
     mp_obj_print_helper(print, env, self->type, PRINT_STR);
@@ -844,11 +873,10 @@ STATIC void super_print(void (*print)(void *env, const char *fmt, ...), void *en
 }
 
 STATIC mp_obj_t super_make_new(mp_obj_t type_in, mp_uint_t n_args, mp_uint_t n_kw, const mp_obj_t *args) {
-    if (n_args != 2 || n_kw != 0) {
-        // 0 arguments are turned into 2 in the compiler
-        // 1 argument is not yet implemented
-        nlr_raise(mp_obj_new_exception_msg(&mp_type_TypeError, "super() requires 2 arguments"));
-    }
+    (void)type_in;
+    // 0 arguments are turned into 2 in the compiler
+    // 1 argument is not yet implemented
+    mp_arg_check_num(n_args, n_kw, 2, 2, false);
     return mp_obj_new_super(args[0], args[1]);
 }
 
@@ -996,9 +1024,7 @@ mp_obj_t mp_instance_cast_to_native_base(mp_const_obj_t self_in, mp_const_obj_t 
 STATIC mp_obj_t static_class_method_make_new(mp_obj_t self_in, mp_uint_t n_args, mp_uint_t n_kw, const mp_obj_t *args) {
     assert(self_in == &mp_type_staticmethod || self_in == &mp_type_classmethod);
 
-    if (n_args != 1 || n_kw != 0) {
-        nlr_raise(mp_obj_new_exception_msg_varg(&mp_type_TypeError, "function takes 1 positional argument but %d were given", n_args));
-    }
+    mp_arg_check_num(n_args, n_kw, 1, 1, false);
 
     mp_obj_static_class_method_t *o = m_new_obj(mp_obj_static_class_method_t);
     *o = (mp_obj_static_class_method_t){{(mp_obj_type_t*)self_in}, args[0]};

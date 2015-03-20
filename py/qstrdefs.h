@@ -24,10 +24,15 @@
  * THE SOFTWARE.
  */
 
-#include "mpconfig.h"
+#include "py/mpconfig.h"
+
 // All the qstr definitions in this file are available as constants.
 // That is, they are in ROM and you can reference them simply as MP_QSTR_xxxx.
 
+// qstr configuration passed to makeqstrdata.py of the form QCFG(key, value)
+QCFG(BYTES_IN_LEN, MICROPY_QSTR_BYTES_IN_LEN)
+
+Q()
 Q(*)
 Q(__build_class__)
 Q(__class__)
@@ -39,6 +44,7 @@ Q(__locals__)
 Q(__main__)
 Q(__module__)
 Q(__name__)
+Q(__hash__)
 Q(__next__)
 Q(__qualname__)
 Q(__path__)
@@ -68,6 +74,14 @@ Q(__gt__)
 Q(__eq__)
 Q(__le__)
 Q(__ge__)
+Q(__reversed__)
+#if MICROPY_PY_ALL_SPECIAL_METHODS
+Q(__mul__)
+Q(__truediv__)
+Q(__floordiv__)
+Q(__iadd__)
+Q(__isub__)
+#endif
 
 Q(micropython)
 Q(bytecode)
@@ -123,6 +137,9 @@ Q(TypeError)
 Q(UnboundLocalError)
 Q(ValueError)
 Q(ZeroDivisionError)
+#if MICROPY_PY_BUILTINS_STR_UNICODE
+Q(UnicodeError)
+#endif
 
 Q(None)
 Q(False)
@@ -166,12 +183,16 @@ Q(divmod)
 Q(enumerate)
 Q(eval)
 Q(exec)
+#if MICROPY_PY_BUILTINS_EXECFILE
+Q(execfile)
+#endif
 Q(filter)
 #if MICROPY_PY_BUILTINS_FLOAT
 Q(float)
 #endif
 Q(from_bytes)
 Q(getattr)
+Q(setattr)
 Q(globals)
 Q(hasattr)
 Q(hash)
@@ -223,6 +244,11 @@ Q(single)
 
 Q(sep)
 Q(end)
+
+#if MICROPY_PY_BUILTINS_RANGE_ATTRS
+Q(step)
+Q(stop)
+#endif
 
 Q(clear)
 Q(copy)
@@ -345,10 +371,12 @@ Q(frexp)
 Q(ldexp)
 Q(degrees)
 Q(radians)
+#if MICROPY_PY_MATH_SPECIAL_FUNCTIONS
 Q(erf)
 Q(erfc)
 Q(gamma)
 Q(lgamma)
+#endif
 #endif
 
 #if MICROPY_PY_CMATH
@@ -358,15 +386,20 @@ Q(polar)
 Q(rect)
 #endif
 
+#if MICROPY_PY_MICROPYTHON_MEM_INFO
 #if MICROPY_MEM_STATS
 Q(mem_total)
 Q(mem_current)
 Q(mem_peak)
 #endif
+Q(mem_info)
+Q(qstr_info)
+#endif
 
 #if MICROPY_ENABLE_EMERGENCY_EXCEPTION_BUF && (MICROPY_EMERGENCY_EXCEPTION_BUF_SIZE == 0)
 Q(alloc_emergency_exception_buf)
 #endif
+Q(maximum recursion depth exceeded)
 
 Q(<module>)
 Q(<lambda>)
@@ -400,6 +433,7 @@ Q(version_info)
 #if MICROPY_PY_SYS_MAXSIZE
 Q(maxsize)
 #endif
+Q(print_exception)
 #endif
 
 #if MICROPY_PY_STRUCT
@@ -454,6 +488,7 @@ Q(readall)
 Q(readinto)
 Q(readline)
 Q(readlines)
+Q(seek)
 Q(FileIO)
 Q(TextIOWrapper)
 Q(StringIO)
@@ -507,4 +542,17 @@ Q(uheapq)
 Q(heappush)
 Q(heappop)
 Q(heapify)
+#endif
+
+#if MICROPY_PY_UHASHLIB
+Q(uhashlib)
+Q(update)
+Q(digest)
+Q(hexdigest)
+Q(sha256)
+#endif
+
+#if MICROPY_PY_UBINASCII
+Q(ubinascii)
+Q(hexlify)
 #endif

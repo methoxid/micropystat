@@ -17,6 +17,10 @@ else:
     CPYTHON3 = os.getenv('MICROPY_CPYTHON3', 'python3')
     MICROPYTHON = os.getenv('MICROPY_MICROPYTHON', '../unix/micropython')
 
+# Set PYTHONIOENCODING so that CPython will use utf-8 on systems which set another encoding in the locale
+os.environ['PYTHONIOENCODING'] = 'utf-8'
+os.environ['MICROPYPATH'] = ''
+
 def rm_f(fname):
     if os.path.exists(fname):
         os.remove(fname)
@@ -24,10 +28,46 @@ def rm_f(fname):
 def run_micropython(pyb, args, test_file):
     if pyb is None:
         # run on PC
-        try:
-            output_mupy = subprocess.check_output([MICROPYTHON, '-X', 'emit=' + args.emit, test_file])
-        except subprocess.CalledProcessError:
-            output_mupy = b'CRASH'
+        if test_file.startswith('cmdline/'):
+            # special handling for tests of the unix cmdline program
+
+            # check for any cmdline options needed for this test
+            args = [MICROPYTHON]
+            with open(test_file, 'rb') as f:
+                line = f.readline()
+                if line.startswith(b'# cmdline:'):
+                    args += line[10:].strip().split()
+
+            # run the test, possibly with redirected input
+            try:
+                if test_file.startswith('cmdline/repl_'):
+                    f = open(test_file, 'rb')
+                    output_mupy = subprocess.check_output(args, stdin=f)
+                    f.close()
+                else:
+                    output_mupy = subprocess.check_output(args + [test_file])
+            except subprocess.CalledProcessError:
+                output_mupy = b'CRASH'
+
+            # erase parts of the output that are not stable across runs
+            with open(test_file + '.exp', 'rb') as f:
+                lines_exp = f.readlines()
+            lines_mupy = [line + b'\n' for line in output_mupy.split(b'\n')]
+            if output_mupy.endswith(b'\n'):
+                lines_mupy = lines_mupy[:-1] # remove erroneous last empty line
+            if len(lines_mupy) == len(lines_exp):
+                for i in range(len(lines_mupy)):
+                    pos = lines_exp[i].find(b'######')
+                    if pos != -1 and len(lines_mupy[i]) >= pos:
+                        lines_mupy[i] = lines_mupy[i][:pos] + b'######\n'
+                output_mupy = b''.join(lines_mupy)
+
+        else:
+            # a standard test
+            try:
+                output_mupy = subprocess.check_output([MICROPYTHON, '-X', 'emit=' + args.emit, test_file])
+            except subprocess.CalledProcessError:
+                output_mupy = b'CRASH'
     else:
         # run on pyboard
         import pyboard
@@ -47,12 +87,12 @@ def run_tests(pyb, tests, args):
     skipped_tests = []
 
     skip_tests = set()
+    skip_native = False
 
     # Check if micropython.native is supported, and skip such tests if it's not
     native = run_micropython(pyb, args, 'micropython/native_check.py')
     if native == b'CRASH':
-        skip_tests.update({'micropython/native_%s.py' % t for t in 'check misc'.split()})
-        skip_tests.update({'micropython/viper_%s.py' % t for t in 'binop_arith binop_comp cond ptr16_store ptr8_store misc'.split()})
+        skip_native = True
 
     # Some tests shouldn't be run under Travis CI
     if os.getenv('TRAVIS') == 'true':
@@ -61,6 +101,7 @@ def run_tests(pyb, tests, args):
     # Some tests shouldn't be run on pyboard
     if pyb is not None:
         skip_tests.add('float/float_divmod.py') # tested by float/float_divmod_relaxed.py instead
+        skip_tests.add('float/float2int_doubleprec.py') # requires double precision floating point to work
 
     # Some tests are known to fail on 64-bit machines
     if pyb is None and platform.architecture()[0] == '64bit':
@@ -69,25 +110,28 @@ def run_tests(pyb, tests, args):
     # Some tests use unsupported features on Windows
     if os.name == 'nt':
         skip_tests.add('import\\import_file.py') #works but CPython prints forward slashes
-        skip_tests.add('unix\\ffi_float.py')
 
     # Some tests are known to fail with native emitter
     # Remove them from the below when they work
     if args.emit == 'native':
-        skip_tests.update({'basics/%s.py' % t for t in 'bytes_gen class_store_class class_super class_super_object closure1 closure2 closure_defargs del_deref del_local fun3 fun_calldblstar fun_callstar fun_callstardblstar fun_defargs fun_defargs2 fun_kwargs fun_kwonly fun_kwonlydef fun_kwvarargs fun_varargs gen_yield_from gen_yield_from_close gen_yield_from_ducktype gen_yield_from_exc gen_yield_from_iter gen_yield_from_send gen_yield_from_throw generator1 generator2 generator_args generator_close generator_closure generator_exc generator_return generator_send globals_del string_format string_join subclass_native2_list subclass_native2_tuple try2 try_finally1 try_finally_loops try_finally_return try_reraise try_reraise2 unboundlocal with1 with_break with_continue with_return'.split()})
+        skip_tests.update({'basics/%s.py' % t for t in 'bytes_gen class_store_class class_super class_super_object closure1 closure2 closure_defargs del_deref del_local fun3 fun_calldblstar fun_callstar fun_callstardblstar fun_defargs fun_defargs2 fun_kwargs fun_kwonly fun_kwonlydef fun_kwvarargs fun_varargs gen_yield_from gen_yield_from_close gen_yield_from_ducktype gen_yield_from_exc gen_yield_from_iter gen_yield_from_send gen_yield_from_throw generator1 generator2 generator_args generator_close generator_closure generator_exc generator_return generator_send globals_del string_format string_join subclass_native2_list subclass_native2_tuple try_finally_loops try_finally_return try_reraise try_reraise2 unboundlocal with1 with_break with_continue with_return'.split()})
+        skip_tests.add('basics/boundmeth1.py') # requires support for many args
         skip_tests.add('float/string_format.py')
+        skip_tests.add('float/cmath_fun.py') # requires f(*args) support
         skip_tests.add('import/gen_context.py')
         skip_tests.add('io/file_with.py')
         skip_tests.add('micropython/heapalloc.py')
         skip_tests.add('misc/features.py')
         skip_tests.add('misc/recursion.py')
         skip_tests.add('misc/rge_sm.py')
+        skip_tests.add('misc/print_exception.py') # because native doesn't have proper traceback info
 
     for test_file in tests:
         test_basename = os.path.basename(test_file)
         test_name = os.path.splitext(test_basename)[0]
+        is_native = test_name.startswith("native_") or test_name.startswith("viper_")
 
-        if test_file in skip_tests:
+        if test_file in skip_tests or (skip_native and is_native):
             print("skip ", test_file)
             skipped_tests.append(test_name)
             continue
@@ -115,8 +159,12 @@ def run_tests(pyb, tests, args):
 
         # run Micro Python
         output_mupy = run_micropython(pyb, args, test_file)
+        if os.name != 'nt':
+            # It may be the case that we run Windows build under Linux
+            # (using Wine).
+            output_mupy = output_mupy.replace(b'\r\n', b'\n')
 
-        if output_mupy == b'SKIP\n':
+        if output_mupy == b'SKIP\n' or output_mupy == b'SKIP\r\n':
             print("skip ", test_file)
             skipped_tests.append(test_name)
             continue
@@ -174,7 +222,7 @@ def main():
         if args.test_dirs is None:
             if pyb is None:
                 # run PC tests
-                test_dirs = ('basics', 'micropython', 'float', 'import', 'io', 'misc', 'unicode', 'extmod', 'unix')
+                test_dirs = ('basics', 'micropython', 'float', 'import', 'io', 'misc', 'unicode', 'extmod', 'unix', 'cmdline')
             else:
                 # run pyboard tests
                 test_dirs = ('basics', 'micropython', 'float', 'misc', 'extmod', 'pyb', 'pybnative', 'inlineasm')

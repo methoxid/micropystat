@@ -29,12 +29,12 @@
 
 #include "stm32f4xx_hal.h"
 
-#include "mpconfig.h"
-#include "misc.h"
-#include "nlr.h"
-#include "qstr.h"
-#include "obj.h"
-#include "gc.h"
+#include "py/mpstate.h"
+#include "py/nlr.h"
+#include "py/obj.h"
+#include "py/gc.h"
+#include "lib/fatfs/ff.h"
+#include "lib/fatfs/diskio.h"
 #include "gccollect.h"
 #include "irq.h"
 #include "systick.h"
@@ -58,8 +58,7 @@
 #include "dac.h"
 #include "lcd.h"
 #include "usb.h"
-#include "pybstdio.h"
-#include "ff.h"
+#include "fsusermount.h"
 #include "portmodules.h"
 
 /// \module pyb - functions related to the pyboard
@@ -69,7 +68,7 @@
 /// \function bootloader()
 /// Activate the bootloader without BOOT* pins.
 STATIC NORETURN mp_obj_t pyb_bootloader(void) {
-    pyb_usb_dev_stop();
+    pyb_usb_dev_deinit();
     storage_flush();
 
     HAL_RCC_DeInit();
@@ -173,15 +172,25 @@ STATIC mp_obj_t pyb_unique_id(void) {
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_0(pyb_unique_id_obj, pyb_unique_id);
 
-/// \function freq([sys_freq])
-///
-/// If given no arguments, returns a tuple of clock frequencies:
-/// (SYSCLK, HCLK, PCLK1, PCLK2).
-///
-/// If given an argument, sets the system frequency to that value in Hz.
-/// Eg freq(120000000) gives 120MHz.  Note that not all values are
-/// supported and the largest supported frequency not greater than
-/// the given sys_freq will be selected.
+// get or set the MCU frequencies
+STATIC mp_uint_t pyb_freq_calc_ahb_div(mp_uint_t wanted_div) {
+    if (wanted_div <= 1) { return RCC_SYSCLK_DIV1; }
+    else if (wanted_div <= 2) { return RCC_SYSCLK_DIV2; }
+    else if (wanted_div <= 4) { return RCC_SYSCLK_DIV4; }
+    else if (wanted_div <= 8) { return RCC_SYSCLK_DIV8; }
+    else if (wanted_div <= 16) { return RCC_SYSCLK_DIV16; }
+    else if (wanted_div <= 64) { return RCC_SYSCLK_DIV64; }
+    else if (wanted_div <= 128) { return RCC_SYSCLK_DIV128; }
+    else if (wanted_div <= 256) { return RCC_SYSCLK_DIV256; }
+    else { return RCC_SYSCLK_DIV512; }
+}
+STATIC mp_uint_t pyb_freq_calc_apb_div(mp_uint_t wanted_div) {
+    if (wanted_div <= 1) { return RCC_HCLK_DIV1; }
+    else if (wanted_div <= 2) { return RCC_HCLK_DIV2; }
+    else if (wanted_div <= 4) { return RCC_HCLK_DIV4; }
+    else if (wanted_div <= 8) { return RCC_HCLK_DIV8; }
+    else { return RCC_SYSCLK_DIV16; }
+}
 STATIC mp_obj_t pyb_freq(mp_uint_t n_args, const mp_obj_t *args) {
     if (n_args == 0) {
         // get
@@ -273,9 +282,23 @@ STATIC mp_obj_t pyb_freq(mp_uint_t n_args, const mp_obj_t *args) {
             // directly set the system clock source as desired
             RCC_ClkInitStruct.SYSCLKSource = sysclk_source;
         }
-        RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-        RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
-        RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
+        wanted_sysclk *= 1000000;
+        if (n_args >= 2) {
+            // note: AHB freq required to be >= 14.2MHz for USB operation
+            RCC_ClkInitStruct.AHBCLKDivider = pyb_freq_calc_ahb_div(wanted_sysclk / mp_obj_get_int(args[1]));
+        } else {
+            RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+        }
+        if (n_args >= 3) {
+            RCC_ClkInitStruct.APB1CLKDivider = pyb_freq_calc_apb_div(wanted_sysclk / mp_obj_get_int(args[2]));
+        } else {
+            RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
+        }
+        if (n_args >= 4) {
+            RCC_ClkInitStruct.APB2CLKDivider = pyb_freq_calc_apb_div(wanted_sysclk / mp_obj_get_int(args[3]));
+        } else {
+            RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
+        }
         if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_1) != HAL_OK) {
             goto fail;
         }
@@ -314,15 +337,7 @@ STATIC mp_obj_t pyb_freq(mp_uint_t n_args, const mp_obj_t *args) {
         __fatal_error("can't change freq");
     }
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(pyb_freq_obj, 0, 1, pyb_freq);
-
-/// \function sync()
-/// Sync all file systems.
-STATIC mp_obj_t pyb_sync(void) {
-    storage_flush();
-    return mp_const_none;
-}
-STATIC MP_DEFINE_CONST_FUN_OBJ_0(pyb_sync_obj, pyb_sync);
+STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(pyb_freq_obj, 0, 4, pyb_freq);
 
 /// \function millis()
 /// Returns the number of milliseconds since the board was last reset.
@@ -402,10 +417,7 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_1(pyb_delay_obj, pyb_delay);
 STATIC mp_obj_t pyb_udelay(mp_obj_t usec_in) {
     mp_int_t usec = mp_obj_get_int(usec_in);
     if (usec > 0) {
-        uint32_t count = 0;
-        const uint32_t utime = (168 * usec / 4);
-        while (++count <= utime) {
-        }
+        sys_tick_udelay(usec);
     }
     return mp_const_none;
 }
@@ -443,27 +455,20 @@ STATIC mp_obj_t pyb_standby(void) {
 }
 MP_DEFINE_CONST_FUN_OBJ_0(pyb_standby_obj, pyb_standby);
 
-/// \function have_cdc()
-/// Return True if USB is connected as a serial device, False otherwise.
-STATIC mp_obj_t pyb_have_cdc(void ) {
-    return MP_BOOL(usb_vcp_is_connected());
-}
-STATIC MP_DEFINE_CONST_FUN_OBJ_0(pyb_have_cdc_obj, pyb_have_cdc);
-
 /// \function repl_uart(uart)
 /// Get or set the UART object that the REPL is repeated on.
 STATIC mp_obj_t pyb_repl_uart(mp_uint_t n_args, const mp_obj_t *args) {
     if (n_args == 0) {
-        if (pyb_stdio_uart == NULL) {
+        if (MP_STATE_PORT(pyb_stdio_uart) == NULL) {
             return mp_const_none;
         } else {
-            return pyb_stdio_uart;
+            return MP_STATE_PORT(pyb_stdio_uart);
         }
     } else {
         if (args[0] == mp_const_none) {
-            pyb_stdio_uart = NULL;
+            MP_STATE_PORT(pyb_stdio_uart) = NULL;
         } else if (mp_obj_get_type(args[0]) == &pyb_uart_type) {
-            pyb_stdio_uart = args[0];
+            MP_STATE_PORT(pyb_stdio_uart) = args[0];
         } else {
             nlr_raise(mp_obj_new_exception_msg(&mp_type_ValueError, "need a UART object"));
         }
@@ -472,24 +477,7 @@ STATIC mp_obj_t pyb_repl_uart(mp_uint_t n_args, const mp_obj_t *args) {
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(pyb_repl_uart_obj, 0, 1, pyb_repl_uart);
 
-/// \function hid((buttons, x, y, z))
-/// Takes a 4-tuple (or list) and sends it to the USB host (the PC) to
-/// signal a HID mouse-motion event.
-STATIC mp_obj_t pyb_hid_send_report(mp_obj_t arg) {
-    mp_obj_t *items;
-    mp_obj_get_array_fixed_n(arg, 4, &items);
-    uint8_t data[4];
-    data[0] = mp_obj_get_int(items[0]);
-    data[1] = mp_obj_get_int(items[1]);
-    data[2] = mp_obj_get_int(items[2]);
-    data[3] = mp_obj_get_int(items[3]);
-    usb_hid_send_report(data);
-    return mp_const_none;
-}
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(pyb_hid_send_report_obj, pyb_hid_send_report);
-
 MP_DECLARE_CONST_FUN_OBJ(pyb_main_obj); // defined in main.c
-MP_DECLARE_CONST_FUN_OBJ(pyb_usb_mode_obj); // defined in main.c
 
 STATIC const mp_map_elem_t pyb_module_globals_table[] = {
     { MP_OBJ_NEW_QSTR(MP_QSTR___name__), MP_OBJ_NEW_QSTR(MP_QSTR_pyb) },
@@ -508,12 +496,16 @@ STATIC const mp_map_elem_t pyb_module_globals_table[] = {
     { MP_OBJ_NEW_QSTR(MP_QSTR_stop), (mp_obj_t)&pyb_stop_obj },
     { MP_OBJ_NEW_QSTR(MP_QSTR_standby), (mp_obj_t)&pyb_standby_obj },
     { MP_OBJ_NEW_QSTR(MP_QSTR_main), (mp_obj_t)&pyb_main_obj },
-    { MP_OBJ_NEW_QSTR(MP_QSTR_usb_mode), (mp_obj_t)&pyb_usb_mode_obj },
-
-    { MP_OBJ_NEW_QSTR(MP_QSTR_have_cdc), (mp_obj_t)&pyb_have_cdc_obj },
     { MP_OBJ_NEW_QSTR(MP_QSTR_repl_uart), (mp_obj_t)&pyb_repl_uart_obj },
-    { MP_OBJ_NEW_QSTR(MP_QSTR_hid), (mp_obj_t)&pyb_hid_send_report_obj },
+
+    { MP_OBJ_NEW_QSTR(MP_QSTR_usb_mode), (mp_obj_t)&pyb_usb_mode_obj },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_hid_mouse), (mp_obj_t)&pyb_usb_hid_mouse_obj },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_hid_keyboard), (mp_obj_t)&pyb_usb_hid_keyboard_obj },
     { MP_OBJ_NEW_QSTR(MP_QSTR_USB_VCP), (mp_obj_t)&pyb_usb_vcp_type },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_USB_HID), (mp_obj_t)&pyb_usb_hid_type },
+    // these 2 are deprecated; use USB_VCP.isconnected and USB_HID.send instead
+    { MP_OBJ_NEW_QSTR(MP_QSTR_have_cdc), (mp_obj_t)&pyb_have_cdc_obj },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_hid), (mp_obj_t)&pyb_hid_send_report_obj },
 
     { MP_OBJ_NEW_QSTR(MP_QSTR_millis), (mp_obj_t)&pyb_millis_obj },
     { MP_OBJ_NEW_QSTR(MP_QSTR_elapsed_millis), (mp_obj_t)&pyb_elapsed_millis_obj },
@@ -521,7 +513,8 @@ STATIC const mp_map_elem_t pyb_module_globals_table[] = {
     { MP_OBJ_NEW_QSTR(MP_QSTR_elapsed_micros), (mp_obj_t)&pyb_elapsed_micros_obj },
     { MP_OBJ_NEW_QSTR(MP_QSTR_delay), (mp_obj_t)&pyb_delay_obj },
     { MP_OBJ_NEW_QSTR(MP_QSTR_udelay), (mp_obj_t)&pyb_udelay_obj },
-    { MP_OBJ_NEW_QSTR(MP_QSTR_sync), (mp_obj_t)&pyb_sync_obj },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_sync), (mp_obj_t)&mod_os_sync_obj },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_mount), (mp_obj_t)&pyb_mount_obj },
 
     { MP_OBJ_NEW_QSTR(MP_QSTR_Timer), (mp_obj_t)&pyb_timer_type },
 
@@ -550,7 +543,9 @@ STATIC const mp_map_elem_t pyb_module_globals_table[] = {
     { MP_OBJ_NEW_QSTR(MP_QSTR_SD), (mp_obj_t)&pyb_sdcard_obj },
 #endif
 
+#if defined(MICROPY_HW_LED1)
     { MP_OBJ_NEW_QSTR(MP_QSTR_LED), (mp_obj_t)&pyb_led_type },
+#endif
     { MP_OBJ_NEW_QSTR(MP_QSTR_I2C), (mp_obj_t)&pyb_i2c_type },
     { MP_OBJ_NEW_QSTR(MP_QSTR_SPI), (mp_obj_t)&pyb_spi_type },
     { MP_OBJ_NEW_QSTR(MP_QSTR_UART), (mp_obj_t)&pyb_uart_type },
@@ -574,16 +569,7 @@ STATIC const mp_map_elem_t pyb_module_globals_table[] = {
 #endif
 };
 
-STATIC const mp_obj_dict_t pyb_module_globals = {
-    .base = {&mp_type_dict},
-    .map = {
-        .all_keys_are_qstrs = 1,
-        .table_is_fixed_array = 1,
-        .used = MP_ARRAY_SIZE(pyb_module_globals_table),
-        .alloc = MP_ARRAY_SIZE(pyb_module_globals_table),
-        .table = (mp_map_elem_t*)pyb_module_globals_table,
-    },
-};
+STATIC MP_DEFINE_CONST_DICT(pyb_module_globals, pyb_module_globals_table);
 
 const mp_obj_module_t pyb_module = {
     .base = { &mp_type_module },

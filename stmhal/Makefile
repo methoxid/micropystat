@@ -23,7 +23,7 @@ CMSIS_DIR=cmsis
 HAL_DIR=hal
 USBDEV_DIR=usbdev
 #USBHOST_DIR=usbhost
-FATFS_DIR=fatfs
+FATFS_DIR=lib/fatfs
 DFU=../tools/dfu.py
 # may need to prefix dfu-util with sudo
 USE_PYDFU ?= 0
@@ -34,14 +34,14 @@ DEVICE=0483:df11
 CROSS_COMPILE = arm-none-eabi-
 
 INC =  -I.
-INC += -I$(PY_SRC)
+INC += -I..
 INC += -I$(BUILD)
 INC += -I$(CMSIS_DIR)/inc
 INC += -I$(CMSIS_DIR)/devinc
 INC += -I$(HAL_DIR)/inc
-INC += -I$(USBDEV_DIR)/core/inc -I$(USBDEV_DIR)/class/cdc_msc_hid/inc
+INC += -I$(USBDEV_DIR)/core/inc -I$(USBDEV_DIR)/class/inc
 #INC += -I$(USBHOST_DIR)
-INC += -I$(FATFS_DIR)/src
+INC += -I../lib/mp-readline
 
 CFLAGS_CORTEX_M4 = -mthumb -mtune=cortex-m4 -mabi=aapcs-linux -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard -fsingle-precision-constant -Wdouble-promotion
 CFLAGS = $(INC) -Wall -Wpointer-arith -Werror -ansi -std=gnu99 -nostdlib $(CFLAGS_MOD) $(CFLAGS_CORTEX_M4) $(COPT)
@@ -65,12 +65,33 @@ endif
 
 SRC_LIB = $(addprefix lib/,\
 	libm/math.c \
-	libm/mathsincos.c \
 	libm/asinfacosf.c \
 	libm/atanf.c \
 	libm/atan2f.c \
 	libm/fmodf.c \
 	libm/roundf.c \
+	libm/log1pf.c \
+	libm/acoshf.c \
+	libm/asinhf.c \
+	libm/atanhf.c \
+	libm/kf_rem_pio2.c \
+	libm/kf_sin.c \
+	libm/kf_cos.c \
+	libm/kf_tan.c \
+	libm/ef_rem_pio2.c \
+	libm/erf_lgamma.c \
+	libm/sf_sin.c \
+	libm/sf_cos.c \
+	libm/sf_tan.c \
+	libm/sf_frexp.c \
+	libm/sf_modf.c \
+	libm/sf_ldexp.c \
+	libm/sf_erf.c \
+	libm/wf_lgamma.c \
+	libm/wf_tgamma.c \
+	fatfs/ff.c \
+	fatfs/option/ccsbcs.c \
+	mp-readline/readline.c \
 	)
 
 SRC_C = \
@@ -78,9 +99,8 @@ SRC_C = \
 	string0.c \
 	system_stm32f4xx.c \
 	stm32f4xx_it.c \
-	stm32f4xx_hal_msp.c \
 	usbd_conf.c \
-	usbd_desc_cdc_msc.c \
+	usbd_desc.c \
 	usbd_cdc_interface.c \
 	usbd_msc_storage.c \
 	mphal.c \
@@ -101,7 +121,6 @@ SRC_C = \
 	printf.c \
 	gccollect.c \
 	pybstdio.c \
-	readline.c \
 	pyexec.c \
 	help.c \
 	input.c \
@@ -122,6 +141,7 @@ SRC_C = \
 	storage.c \
 	file.c \
 	sdcard.c \
+	fsusermount.c \
 	diskio.c \
 	ffconf.c \
 	lcd.c \
@@ -168,38 +188,17 @@ SRC_USBDEV = $(addprefix $(USBDEV_DIR)/,\
 	core/src/usbd_core.c \
 	core/src/usbd_ctlreq.c \
 	core/src/usbd_ioreq.c \
-	class/cdc_msc_hid/src/usbd_cdc_msc_hid.c \
-	class/cdc_msc_hid/src/usbd_msc_bot.c \
-	class/cdc_msc_hid/src/usbd_msc_scsi.c \
-	class/cdc_msc_hid/src/usbd_msc_data.c \
-	)
-
-#	class/cdc/src/usbd_cdc.c \
-	class/msc/src/usbd_msc.c \
-#	usbd_core.c \
-	usbd_ioreq.c \
-	usbd_req.c \
-	usbd_usr.c \
-	usbd_desc.c \
-	usbd_pyb_core.c \
-	usbd_pyb_core2.c \
-	usbd_cdc_vcp.c \
-	usbd_msc_bot.c  \
-	usbd_msc_data.c \
-	usbd_msc_scsi.c \
-	usbd_storage_msd.c \
-	)
-
-SRC_FATFS = $(addprefix $(FATFS_DIR)/src/,\
-	ff.c \
-	option/ccsbcs.c \
+	class/src/usbd_cdc_msc_hid.c \
+	class/src/usbd_msc_bot.c \
+	class/src/usbd_msc_scsi.c \
+	class/src/usbd_msc_data.c \
 	)
 
 ifeq ($(MICROPY_PY_WIZNET5K),1)
 WIZNET5K_DIR=drivers/wiznet5k
 INC += -I$(TOP)/$(WIZNET5K_DIR)
 CFLAGS_MOD += -DMICROPY_PY_WIZNET5K=1
-SRC_MOD += modwiznet5k.c
+SRC_MOD += modnwwiznet5k.c
 SRC_MOD += $(addprefix $(WIZNET5K_DIR)/,\
 	ethernet/w5200/w5200.c \
 	ethernet/wizchip_conf.c \
@@ -213,7 +212,7 @@ ifeq ($(MICROPY_PY_CC3K),1)
 CC3000_DIR=drivers/cc3000
 INC += -I$(TOP)/$(CC3000_DIR)/inc
 CFLAGS_MOD += -DMICROPY_PY_CC3K=1
-SRC_MOD += modcc3k.c
+SRC_MOD += modnwcc3k.c
 SRC_MOD += $(addprefix $(CC3000_DIR)/src/,\
 	cc3000_common.c \
 	evnt_handler.c \
@@ -238,7 +237,6 @@ OBJ += $(addprefix $(BUILD)/, $(SRC_C:.c=.o))
 OBJ += $(addprefix $(BUILD)/, $(SRC_S:.s=.o))
 OBJ += $(addprefix $(BUILD)/, $(SRC_HAL:.c=.o))
 OBJ += $(addprefix $(BUILD)/, $(SRC_USBDEV:.c=.o))
-OBJ += $(addprefix $(BUILD)/, $(SRC_FATFS:.c=.o))
 OBJ += $(addprefix $(BUILD)/, $(SRC_MOD:.c=.o))
 OBJ += $(BUILD)/pins_$(BOARD).o
 
@@ -246,7 +244,7 @@ OBJ += $(BUILD)/pins_$(BOARD).o
 # If we compile these using -O0 then it won't fit. So if you really want these
 # to be compiled with -O0, then edit stm32f405.ld (in the .isr_vector section)
 # and comment out the following 2 lines.
-$(BUILD)/$(FATFS_DIR)/src/ff.o: COPT += -Os
+$(BUILD)/$(FATFS_DIR)/ff.o: COPT += -Os
 $(BUILD)/$(HAL_DIR)/src/stm32f4xx_hal_sd.o: COPT += -Os
 
 all: $(BUILD)/firmware.dfu $(BUILD)/firmware.hex
@@ -291,7 +289,7 @@ GEN_PINS_AF_PY = $(BUILD)/pins_af.py
 INSERT_USB_IDS = ../tools/insert-usb-ids.py
 FILE2H = ../tools/file2h.py
 
-USB_IDS_FILE = usbd_desc_cdc_msc.c
+USB_IDS_FILE = usbd_desc.c
 CDCINF_TEMPLATE = pybcdc.inf_template
 GEN_CDCINF_FILE = $(HEADER_BUILD)/pybcdc.inf
 GEN_CDCINF_HEADER = $(HEADER_BUILD)/pybcdc_inf.h

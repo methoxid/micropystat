@@ -7,7 +7,7 @@ PROG = cpy
 include ../py/py.mk
 
 INC =  -I.
-INC += -I$(PY_SRC)
+INC += -I..
 INC += -I$(BUILD)
 
 # compiler settings

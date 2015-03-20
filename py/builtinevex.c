@@ -26,20 +26,11 @@
 
 #include <stdint.h>
 
-#include "mpconfig.h"
-#include "nlr.h"
-#include "misc.h"
-#include "qstr.h"
-#include "lexer.h"
-#include "lexerunix.h"
-#include "parse.h"
-#include "obj.h"
-#include "objfun.h"
-#include "parsehelper.h"
-#include "compile.h"
-#include "runtime0.h"
-#include "runtime.h"
-#include "builtin.h"
+#include "py/nlr.h"
+#include "py/objfun.h"
+#include "py/compile.h"
+#include "py/runtime.h"
+#include "py/builtin.h"
 
 #if MICROPY_PY_BUILTINS_COMPILE
 
@@ -84,6 +75,8 @@ STATIC mp_obj_t code_execute(mp_obj_code_t *self, mp_obj_t globals, mp_obj_t loc
 }
 
 STATIC mp_obj_t mp_builtin_compile(mp_uint_t n_args, const mp_obj_t *args) {
+    (void)n_args;
+
     // get the source
     mp_uint_t str_len;
     const char *str = mp_obj_str_get_data(args[0], &str_len);
@@ -137,7 +130,17 @@ STATIC mp_obj_t eval_exec_helper(mp_uint_t n_args, const mp_obj_t *args, mp_pars
     const char *str = mp_obj_str_get_data(args[0], &str_len);
 
     // create the lexer
-    mp_lexer_t *lex = mp_lexer_new_from_str_len(MP_QSTR__lt_string_gt_, str, str_len, 0);
+    // MP_PARSE_SINGLE_INPUT is used to indicate a file input
+    mp_lexer_t *lex;
+    if (MICROPY_PY_BUILTINS_EXECFILE && parse_input_kind == MP_PARSE_SINGLE_INPUT) {
+        lex = mp_lexer_new_from_file(str);
+        if (lex == NULL) {
+            nlr_raise(mp_obj_new_exception_msg_varg(&mp_type_OSError, "could not open file '%s'", str));
+        }
+        parse_input_kind = MP_PARSE_FILE_INPUT;
+    } else {
+        lex = mp_lexer_new_from_str_len(MP_QSTR__lt_string_gt_, str, str_len, 0);
+    }
 
     return mp_parse_compile_execute(lex, parse_input_kind, globals, locals);
 }
@@ -151,3 +154,11 @@ STATIC mp_obj_t mp_builtin_exec(mp_uint_t n_args, const mp_obj_t *args) {
     return eval_exec_helper(n_args, args, MP_PARSE_FILE_INPUT);
 }
 MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_builtin_exec_obj, 1, 3, mp_builtin_exec);
+
+#if MICROPY_PY_BUILTINS_EXECFILE
+STATIC mp_obj_t mp_builtin_execfile(mp_uint_t n_args, const mp_obj_t *args) {
+    // MP_PARSE_SINGLE_INPUT is used to indicate a file input
+    return eval_exec_helper(n_args, args, MP_PARSE_SINGLE_INPUT);
+}
+MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_builtin_execfile_obj, 1, 3, mp_builtin_execfile);
+#endif

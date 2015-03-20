@@ -27,18 +27,15 @@
 #include <stdint.h>
 #include <string.h>
 
-#include "mpconfig.h"
-#include "nlr.h"
-#include "misc.h"
-#include "qstr.h"
-#include "obj.h"
-#include "objtuple.h"
-#include "systick.h"
+#include "py/nlr.h"
+#include "py/obj.h"
+#include "py/objtuple.h"
+#include "lib/fatfs/ff.h"
+#include "lib/fatfs/diskio.h"
 #include "rng.h"
-#include "storage.h"
-#include "ff.h"
 #include "file.h"
 #include "sdcard.h"
+#include "fsusermount.h"
 #include "portmodules.h"
 
 /// \module os - basic "operating system" services
@@ -122,6 +119,9 @@ STATIC mp_obj_t os_listdir(mp_uint_t n_args, const mp_obj_t *args) {
         mp_obj_list_append(dir_list, MP_OBJ_NEW_QSTR(MP_QSTR_flash));
         if (sd_in_root()) {
             mp_obj_list_append(dir_list, MP_OBJ_NEW_QSTR(MP_QSTR_sd));
+        }
+        if (fs_user_mount != NULL) {
+            mp_obj_list_append(dir_list, mp_obj_new_str(fs_user_mount->str + 1, fs_user_mount->len - 1, false));
         }
         return dir_list;
     }
@@ -308,10 +308,12 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_1(os_stat_obj, os_stat);
 /// \function sync()
 /// Sync all filesystems.
 STATIC mp_obj_t os_sync(void) {
-    storage_flush();
+    disk_ioctl(0, CTRL_SYNC, NULL);
+    disk_ioctl(1, CTRL_SYNC, NULL);
+    disk_ioctl(2, CTRL_SYNC, NULL);
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_0(os_sync_obj, os_sync);
+MP_DEFINE_CONST_FUN_OBJ_0(mod_os_sync_obj, os_sync);
 
 #if MICROPY_HW_ENABLE_RNG
 /// \function urandom(n)
@@ -319,12 +321,12 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_0(os_sync_obj, os_sync);
 /// random number generator.
 STATIC mp_obj_t os_urandom(mp_obj_t num) {
     mp_int_t n = mp_obj_get_int(num);
-    byte *data;
-    mp_obj_t o = mp_obj_str_builder_start(&mp_type_bytes, n, &data);
+    vstr_t vstr;
+    vstr_init_len(&vstr, n);
     for (int i = 0; i < n; i++) {
-        data[i] = rng_get();
+        vstr.buf[i] = rng_get();
     }
-    return mp_obj_str_builder_end(o);
+    return mp_obj_new_str_from_vstr(&mp_type_bytes, &vstr);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(os_urandom_obj, os_urandom);
 #endif
@@ -341,7 +343,7 @@ STATIC const mp_map_elem_t os_module_globals_table[] = {
     { MP_OBJ_NEW_QSTR(MP_QSTR_stat), (mp_obj_t)&os_stat_obj },
     { MP_OBJ_NEW_QSTR(MP_QSTR_unlink), (mp_obj_t)&os_remove_obj }, // unlink aliases to remove
 
-    { MP_OBJ_NEW_QSTR(MP_QSTR_sync), (mp_obj_t)&os_sync_obj },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_sync), (mp_obj_t)&mod_os_sync_obj },
 
     /// \constant sep - separation character used in paths
     { MP_OBJ_NEW_QSTR(MP_QSTR_sep), MP_OBJ_NEW_QSTR(MP_QSTR__slash_) },
@@ -351,16 +353,7 @@ STATIC const mp_map_elem_t os_module_globals_table[] = {
 #endif
 };
 
-STATIC const mp_obj_dict_t os_module_globals = {
-    .base = {&mp_type_dict},
-    .map = {
-        .all_keys_are_qstrs = 1,
-        .table_is_fixed_array = 1,
-        .used = MP_ARRAY_SIZE(os_module_globals_table),
-        .alloc = MP_ARRAY_SIZE(os_module_globals_table),
-        .table = (mp_map_elem_t*)os_module_globals_table,
-    },
-};
+STATIC MP_DEFINE_CONST_DICT(os_module_globals, os_module_globals_table);
 
 const mp_obj_module_t mp_module_uos = {
     .base = { &mp_type_module },

@@ -6,6 +6,7 @@ full_tests = False
 def test(fmt, *args):
     print('{:8s}'.format(fmt) + '>' +  fmt.format(*args) + '<')
 
+test("}}{{")
 test("{}-{}", 1, [4, 5])
 test("{0}-{1}", 1, [4, 5])
 test("{1}-{0}", 1, [4, 5])
@@ -40,6 +41,7 @@ test("{:#4X}", 0)
 test("{:<6s}", "ab")
 test("{:>6s}", "ab")
 test("{:^6s}", "ab")
+test("{:.1s}", "ab")
 
 test("{: <6d}", 123)
 test("{: <6d}", -123)
@@ -59,6 +61,10 @@ test("{:@>6d}",  -123)
 test("{:@<6d}",  -123)
 test("{:@=6d}",  -123)
 test("{:06d}",  -123)
+
+print("{foo}/foo".format(foo="bar"))
+print("{}".format(123, foo="bar"))
+print("{}-{foo}".format(123, foo="bar"))
 
 def test_fmt(conv, fill, alignment, sign, prefix, width, precision, type, arg):
     fmt = '{'

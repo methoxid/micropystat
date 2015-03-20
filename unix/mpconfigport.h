@@ -33,10 +33,21 @@
 #if !defined(MICROPY_EMIT_X86) && defined(__i386__)
     #define MICROPY_EMIT_X86        (1)
 #endif
+#if !defined(MICROPY_EMIT_THUMB) && defined(__thumb2__)
+    #define MICROPY_EMIT_THUMB      (1)
+#endif
+#if !defined(MICROPY_EMIT_ARM) && defined(__arm__)
+    #define MICROPY_EMIT_ARM        (1)
+#endif
+#define MICROPY_COMP_MODULE_CONST   (1)
+#define MICROPY_COMP_TRIPLE_TUPLE_ASSIGN (1)
 #define MICROPY_ENABLE_GC           (1)
 #define MICROPY_ENABLE_FINALISER    (1)
+#define MICROPY_STACK_CHECK         (1)
+#define MICROPY_MALLOC_USES_ALLOCATED_SIZE (1)
 #define MICROPY_MEM_STATS           (1)
 #define MICROPY_DEBUG_PRINTERS      (1)
+#define MICROPY_USE_READLINE_HISTORY (1)
 #define MICROPY_HELPER_REPL         (1)
 #define MICROPY_HELPER_LEXER_UNIX   (1)
 #define MICROPY_ENABLE_SOURCE_LINE  (1)
@@ -44,14 +55,20 @@
 #define MICROPY_LONGINT_IMPL        (MICROPY_LONGINT_IMPL_MPZ)
 #define MICROPY_STREAMS_NON_BLOCK   (1)
 #define MICROPY_OPT_COMPUTED_GOTO   (1)
+#define MICROPY_OPT_CACHE_MAP_LOOKUP_IN_BYTECODE (1)
+#define MICROPY_CAN_OVERRIDE_BUILTINS (1)
 #define MICROPY_PY_BUILTINS_STR_UNICODE (1)
 #define MICROPY_PY_BUILTINS_MEMORYVIEW (1)
 #define MICROPY_PY_BUILTINS_FROZENSET (1)
 #define MICROPY_PY_BUILTINS_COMPILE (1)
+#define MICROPY_PY_MICROPYTHON_MEM_INFO (1)
+#define MICROPY_PY_ALL_SPECIAL_METHODS (1)
+#define MICROPY_PY_ARRAY_SLICE_ASSIGN (1)
 #define MICROPY_PY_SYS_EXIT         (1)
 #define MICROPY_PY_SYS_PLATFORM     "linux"
 #define MICROPY_PY_SYS_MAXSIZE      (1)
 #define MICROPY_PY_SYS_STDFILES     (1)
+#define MICROPY_PY_MATH_SPECIAL_FUNCTIONS (1)
 #define MICROPY_PY_CMATH            (1)
 #define MICROPY_PY_IO_FILEIO        (1)
 #define MICROPY_PY_GC_COLLECT_RETVAL (1)
@@ -61,10 +78,13 @@
 #define MICROPY_PY_UJSON            (1)
 #define MICROPY_PY_URE              (1)
 #define MICROPY_PY_UHEAPQ           (1)
+#define MICROPY_PY_UHASHLIB         (1)
+#define MICROPY_PY_UBINASCII        (1)
 
 // Define to MICROPY_ERROR_REPORTING_DETAILED to get function, etc.
 // names in exception messages (may require more RAM).
 #define MICROPY_ERROR_REPORTING     (MICROPY_ERROR_REPORTING_DETAILED)
+#define MICROPY_WARNINGS            (1)
 
 // Define to 1 to use undertested inefficient GC helper implementation
 // (if more efficient arch-specific one is not available).
@@ -91,7 +111,7 @@ extern const struct _mp_obj_module_t mp_module_ffi;
 #define MICROPY_PY_FFI_DEF
 #endif
 #if MICROPY_PY_TIME
-#define MICROPY_PY_TIME_DEF { MP_OBJ_NEW_QSTR(MP_QSTR_time), (mp_obj_t)&mp_module_time },
+#define MICROPY_PY_TIME_DEF { MP_OBJ_NEW_QSTR(MP_QSTR_utime), (mp_obj_t)&mp_module_time },
 #else
 #define MICROPY_PY_TIME_DEF
 #endif
@@ -100,11 +120,16 @@ extern const struct _mp_obj_module_t mp_module_ffi;
 #else
 #define MICROPY_PY_TERMIOS_DEF
 #endif
+#if MICROPY_PY_SOCKET
+#define MICROPY_PY_SOCKET_DEF { MP_OBJ_NEW_QSTR(MP_QSTR_usocket), (mp_obj_t)&mp_module_socket },
+#else
+#define MICROPY_PY_SOCKET_DEF
+#endif
 
 #define MICROPY_PORT_BUILTIN_MODULES \
     MICROPY_PY_FFI_DEF \
     MICROPY_PY_TIME_DEF \
-    { MP_OBJ_NEW_QSTR(MP_QSTR_usocket), (mp_obj_t)&mp_module_socket }, \
+    MICROPY_PY_SOCKET_DEF \
     { MP_OBJ_NEW_QSTR(MP_QSTR__os), (mp_obj_t)&mp_module_os }, \
     MICROPY_PY_TERMIOS_DEF \
 
@@ -122,11 +147,19 @@ typedef unsigned int mp_uint_t; // must be pointer size
 
 #define BYTES_PER_WORD sizeof(mp_int_t)
 
+// Cannot include <sys/types.h>, as it may lead to symbol name clashes
+#if _FILE_OFFSET_BITS == 64 && !defined(__LP64__)
+typedef long long mp_off_t;
+#else
+typedef long mp_off_t;
+#endif
+
 typedef void *machine_ptr_t; // must be of pointer size
 typedef const void *machine_const_ptr_t; // must be of pointer size
 
 void mp_unix_alloc_exec(mp_uint_t min_size, void** ptr, mp_uint_t *size);
 void mp_unix_free_exec(void *ptr, mp_uint_t size);
+void mp_unix_mark_exec(void);
 #define MP_PLAT_ALLOC_EXEC(min_size, ptr, size) mp_unix_alloc_exec(min_size, ptr, size)
 #define MP_PLAT_FREE_EXEC(ptr, size) mp_unix_free_exec(ptr, size)
 
@@ -135,6 +168,10 @@ extern const struct _mp_obj_fun_builtin_t mp_builtin_open_obj;
 #define MICROPY_PORT_BUILTINS \
     { MP_OBJ_NEW_QSTR(MP_QSTR_input), (mp_obj_t)&mp_builtin_input_obj }, \
     { MP_OBJ_NEW_QSTR(MP_QSTR_open), (mp_obj_t)&mp_builtin_open_obj },
+
+#define MICROPY_PORT_ROOT_POINTERS \
+    mp_obj_t keyboard_interrupt_obj; \
+    void *mmap_region_head; \
 
 // We need to provide a declaration/definition of alloca()
 #ifdef __FreeBSD__

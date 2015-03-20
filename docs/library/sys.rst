@@ -12,6 +12,16 @@ Functions
    Raise a ``SystemExit`` exception.  If an argument is given, it is the
    value given to ``SystemExit``.
 
+.. function:: print_exception(exc, [file])
+
+   Print exception with a traceback to a file-like object ``file`` (or
+   ``sys.stdout`` by default).
+
+   .. admonition:: Difference to CPython
+      :class: attention
+
+      This function appears in the ``traceback`` module in CPython.
+
 Constants
 ---------
 
@@ -29,7 +39,9 @@ Constants
 
 .. data:: platform
 
-   the platform that Micro Python is running on
+   The platform that Micro Python is running on.  This is "pyboard" on the
+   pyboard and provides a robust way of determining if a script is running
+   on the pyboard or not.
 
 .. data:: stderr
 

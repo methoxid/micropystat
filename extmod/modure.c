@@ -28,13 +28,9 @@
 #include <assert.h>
 #include <string.h>
 
-#include "mpconfig.h"
-#include "nlr.h"
-#include "misc.h"
-#include "qstr.h"
-#include "obj.h"
-#include "runtime.h"
-#include "binary.h"
+#include "py/nlr.h"
+#include "py/runtime.h"
+#include "py/binary.h"
 
 #if MICROPY_PY_URE
 
@@ -56,18 +52,23 @@ typedef struct _mp_obj_match_t {
 
 
 STATIC void match_print(void (*print)(void *env, const char *fmt, ...), void *env, mp_obj_t self_in, mp_print_kind_t kind) {
+    (void)kind;
     mp_obj_match_t *self = self_in;
-    print(env, "<match num=%d @%p>", self->num_matches);
+    print(env, "<match num=%d>", self->num_matches);
 }
 
 STATIC mp_obj_t match_group(mp_obj_t self_in, mp_obj_t no_in) {
     mp_obj_match_t *self = self_in;
-    mp_int_t no = mp_obj_int_get(no_in);
-    if (no < 0 || no >= self->num_matches / 2) {
+    mp_int_t no = mp_obj_int_get_truncated(no_in);
+    if (no < 0 || no >= self->num_matches) {
         nlr_raise(mp_obj_new_exception_arg1(&mp_type_IndexError, no_in));
     }
 
     const char *start = self->caps[no * 2];
+    if (start == NULL) {
+        // no match for this group
+        return mp_const_none;
+    }
     return mp_obj_new_str(start, self->caps[no * 2 + 1] - start, false);
 }
 MP_DEFINE_CONST_FUN_OBJ_2(match_group_obj, match_group);
@@ -86,11 +87,13 @@ STATIC const mp_obj_type_t match_type = {
 };
 
 STATIC void re_print(void (*print)(void *env, const char *fmt, ...), void *env, mp_obj_t self_in, mp_print_kind_t kind) {
+    (void)kind;
     mp_obj_re_t *self = self_in;
     print(env, "<re %p>", self);
 }
 
 STATIC mp_obj_t re_exec(bool is_anchored, uint n_args, const mp_obj_t *args) {
+    (void)n_args;
     mp_obj_re_t *self = args[0];
     Subject subj;
     mp_uint_t len;
@@ -98,6 +101,8 @@ STATIC mp_obj_t re_exec(bool is_anchored, uint n_args, const mp_obj_t *args) {
     subj.end = subj.begin + len;
     int caps_num = (self->re.sub + 1) * 2;
     mp_obj_match_t *match = m_new_obj_var(mp_obj_match_t, char*, caps_num);
+    // cast is a workaround for a bug in msvc: it treats const char** as a const pointer instead of a pointer to pointer to const char
+    memset((char*)match->caps, 0, caps_num * sizeof(char*));
     int res = re1_5_recursiveloopprog(&self->re, &subj, match->caps, caps_num, is_anchored);
     if (res == 0) {
         m_del_var(mp_obj_match_t, char*, caps_num, match);
@@ -105,7 +110,7 @@ STATIC mp_obj_t re_exec(bool is_anchored, uint n_args, const mp_obj_t *args) {
     }
 
     match->base.type = &match_type;
-    match->num_matches = caps_num;
+    match->num_matches = caps_num / 2; // caps_num counts start and end pointers
     match->str = args[1];
     return match;
 }
@@ -130,12 +135,14 @@ STATIC mp_obj_t re_split(uint n_args, const mp_obj_t *args) {
 
     int maxsplit = 0;
     if (n_args > 2) {
-        maxsplit = mp_obj_int_get(args[2]);
+        maxsplit = mp_obj_int_get_truncated(args[2]);
     }
 
     mp_obj_t retval = mp_obj_new_list(0, NULL);
-    const char *caps[caps_num];
+    const char **caps = alloca(caps_num * sizeof(char*));
     while (true) {
+        // cast is a workaround for a bug in msvc: it treats const char** as a const pointer instead of a pointer to pointer to const char
+        memset((char**)caps, 0, caps_num * sizeof(char*));
         int res = re1_5_recursiveloopprog(&self->re, &subj, caps, caps_num, false);
 
         // if we didn't have a match, or had an empty match, it's time to stop
@@ -175,7 +182,7 @@ STATIC const mp_obj_type_t re_type = {
     .locals_dict = (mp_obj_t)&re_locals_dict,
 };
 
-mp_obj_t mod_re_compile(uint n_args, const mp_obj_t *args) {
+STATIC mp_obj_t mod_re_compile(uint n_args, const mp_obj_t *args) {
     const char *re_str = mp_obj_str_get_str(args[0]);
     int size = re1_5_sizecode(re_str);
     mp_obj_re_t *o = m_new_obj_var(mp_obj_re_t, char, size);
@@ -196,6 +203,7 @@ mp_obj_t mod_re_compile(uint n_args, const mp_obj_t *args) {
 MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mod_re_compile_obj, 1, 2, mod_re_compile);
 
 STATIC mp_obj_t mod_re_exec(bool is_anchored, uint n_args, const mp_obj_t *args) {
+    (void)n_args;
     mp_obj_re_t *self = mod_re_compile(1, args);
 
     const mp_obj_t args2[] = {self, args[1]};
@@ -221,16 +229,7 @@ STATIC const mp_map_elem_t mp_module_re_globals_table[] = {
     { MP_OBJ_NEW_QSTR(MP_QSTR_DEBUG), MP_OBJ_NEW_SMALL_INT(FLAG_DEBUG) },
 };
 
-STATIC const mp_obj_dict_t mp_module_re_globals = {
-    .base = {&mp_type_dict},
-    .map = {
-        .all_keys_are_qstrs = 1,
-        .table_is_fixed_array = 1,
-        .used = MP_ARRAY_SIZE(mp_module_re_globals_table),
-        .alloc = MP_ARRAY_SIZE(mp_module_re_globals_table),
-        .table = (mp_map_elem_t*)mp_module_re_globals_table,
-    },
-};
+STATIC MP_DEFINE_CONST_DICT(mp_module_re_globals, mp_module_re_globals_table);
 
 const mp_obj_module_t mp_module_ure = {
     .base = { &mp_type_module },

@@ -27,14 +27,10 @@
 
 #include <string.h>
 
-#include "mpconfig.h"
-#include "nlr.h"
-#include "misc.h"
-#include "qstr.h"
-#include "obj.h"
-#include "objstr.h"
-#include "runtime.h"
-#include "stream.h"
+#include "py/nlr.h"
+#include "py/objstr.h"
+#include "py/stream.h"
+
 #if MICROPY_STREAMS_NON_BLOCK
 #include <errno.h>
 #if defined(__MINGW32__) && !defined(__MINGW64_VERSION_MAJOR)
@@ -160,17 +156,16 @@ STATIC mp_obj_t stream_read(mp_uint_t n_args, const mp_obj_t *args) {
             }
         }
 
-        mp_obj_t ret = mp_obj_new_str_of_type(&mp_type_str, (byte*)vstr.buf, vstr.len);
-        vstr_clear(&vstr);
-        return ret;
+        return mp_obj_new_str_from_vstr(&mp_type_str, &vstr);
     }
     #endif
 
-    byte *buf;
-    mp_obj_t ret_obj = mp_obj_str_builder_start(STREAM_CONTENT_TYPE(o->type->stream_p), sz, &buf);
+    vstr_t vstr;
+    vstr_init_len(&vstr, sz);
     int error;
-    mp_uint_t out_sz = o->type->stream_p->read(o, buf, sz, &error);
+    mp_uint_t out_sz = o->type->stream_p->read(o, vstr.buf, sz, &error);
     if (out_sz == MP_STREAM_ERROR) {
+        vstr_clear(&vstr);
         if (is_nonblocking_error(error)) {
             // https://docs.python.org/3.4/library/io.html#io.RawIOBase.read
             // "If the object is in non-blocking mode and no bytes are available,
@@ -181,7 +176,8 @@ STATIC mp_obj_t stream_read(mp_uint_t n_args, const mp_obj_t *args) {
         }
         nlr_raise(mp_obj_new_exception_arg1(&mp_type_OSError, MP_OBJ_NEW_SMALL_INT(error)));
     } else {
-        return mp_obj_str_builder_end_with_len(ret_obj, out_sz);
+        vstr.len = out_sz;
+        return mp_obj_new_str_from_vstr(STREAM_CONTENT_TYPE(o->type->stream_p), &vstr);
     }
 }
 
@@ -229,7 +225,7 @@ STATIC mp_obj_t stream_readinto(mp_uint_t n_args, const mp_obj_t *args) {
     // https://docs.python.org/3/library/socket.html#socket.socket.recv_into
     mp_uint_t len = bufinfo.len;
     if (n_args > 2) {
-        len = mp_obj_int_get(args[2]);
+        len = mp_obj_int_get_truncated(args[2]);
         if (len > bufinfo.len) {
             len = bufinfo.len;
         }
@@ -255,8 +251,9 @@ STATIC mp_obj_t stream_readall(mp_obj_t self_in) {
     }
 
     mp_uint_t total_size = 0;
-    vstr_t *vstr = vstr_new_size(DEFAULT_BUFFER_SIZE);
-    char *p = vstr_str(vstr);
+    vstr_t vstr;
+    vstr_init(&vstr, DEFAULT_BUFFER_SIZE);
+    char *p = vstr.buf;
     mp_uint_t current_read = DEFAULT_BUFFER_SIZE;
     while (true) {
         int error;
@@ -281,8 +278,8 @@ STATIC mp_obj_t stream_readall(mp_obj_t self_in) {
             current_read -= out_sz;
             p += out_sz;
         } else {
+            p = vstr_extend(&vstr, DEFAULT_BUFFER_SIZE);
             current_read = DEFAULT_BUFFER_SIZE;
-            p = vstr_extend(vstr, current_read);
             if (p == NULL) {
                 // TODO
                 nlr_raise(mp_obj_new_exception_msg_varg(&mp_type_OSError/*&mp_type_RuntimeError*/, "Out of memory"));
@@ -290,9 +287,8 @@ STATIC mp_obj_t stream_readall(mp_obj_t self_in) {
         }
     }
 
-    mp_obj_t s = mp_obj_new_str_of_type(STREAM_CONTENT_TYPE(o->type->stream_p), (byte*)vstr->buf, total_size);
-    vstr_free(vstr);
-    return s;
+    vstr.len = total_size;
+    return mp_obj_new_str_from_vstr(STREAM_CONTENT_TYPE(o->type->stream_p), &vstr);
 }
 
 // Unbuffered, inefficient implementation of readline() for raw I/O files.
@@ -308,15 +304,15 @@ STATIC mp_obj_t stream_unbuffered_readline(mp_uint_t n_args, const mp_obj_t *arg
         max_size = MP_OBJ_SMALL_INT_VALUE(args[1]);
     }
 
-    vstr_t *vstr;
+    vstr_t vstr;
     if (max_size != -1) {
-        vstr = vstr_new_size(max_size);
+        vstr_init(&vstr, max_size);
     } else {
-        vstr = vstr_new();
+        vstr_init(&vstr, 16);
     }
 
     while (max_size == -1 || max_size-- != 0) {
-        char *p = vstr_add_len(vstr, 1);
+        char *p = vstr_add_len(&vstr, 1);
         if (p == NULL) {
             nlr_raise(mp_obj_new_exception_msg_varg(&mp_type_MemoryError, "out of memory"));
         }
@@ -325,14 +321,14 @@ STATIC mp_obj_t stream_unbuffered_readline(mp_uint_t n_args, const mp_obj_t *arg
         mp_uint_t out_sz = o->type->stream_p->read(o, p, 1, &error);
         if (out_sz == MP_STREAM_ERROR) {
             if (is_nonblocking_error(error)) {
-                if (vstr->len == 1) {
+                if (vstr.len == 1) {
                     // We just incremented it, but otherwise we read nothing
                     // and immediately got EAGAIN. This is case is not well
                     // specified in
                     // https://docs.python.org/3/library/io.html#io.IOBase.readline
                     // unlike similar case for read(). But we follow the latter's
                     // behavior - return None.
-                    vstr_free(vstr);
+                    vstr_clear(&vstr);
                     return mp_const_none;
                 } else {
                     goto done;
@@ -345,17 +341,15 @@ done:
             // Back out previously added byte
             // Consider, what's better - read a char and get OutOfMemory (so read
             // char is lost), or allocate first as we do.
-            vstr_cut_tail_bytes(vstr, 1);
+            vstr_cut_tail_bytes(&vstr, 1);
             break;
         }
         if (*p == '\n') {
             break;
         }
     }
-    // TODO need a string creation API that doesn't copy the given data
-    mp_obj_t ret = mp_obj_new_str_of_type(STREAM_CONTENT_TYPE(o->type->stream_p), (byte*)vstr->buf, vstr->len);
-    vstr_free(vstr);
-    return ret;
+
+    return mp_obj_new_str_from_vstr(STREAM_CONTENT_TYPE(o->type->stream_p), &vstr);
 }
 
 // TODO take an optional extra argument (what does it do exactly?)
@@ -379,6 +373,32 @@ mp_obj_t mp_stream_unbuffered_iter(mp_obj_t self) {
     }
     return MP_OBJ_STOP_ITERATION;
 }
+
+STATIC mp_obj_t stream_seek(mp_uint_t n_args, const mp_obj_t *args) {
+    struct _mp_obj_base_t *o = (struct _mp_obj_base_t *)args[0];
+    if (o->type->stream_p == NULL || o->type->stream_p->ioctl == NULL) {
+        // CPython: io.UnsupportedOperation, OSError subclass
+        nlr_raise(mp_obj_new_exception_msg(&mp_type_OSError, "Operation not supported"));
+    }
+
+    struct mp_stream_seek_t seek_s;
+    // TODO: Could be uint64
+    seek_s.offset = mp_obj_get_int(args[1]);
+    seek_s.whence = 0;
+    if (n_args == 3) {
+        seek_s.whence = mp_obj_get_int(args[2]);
+    }
+
+    int error;
+    mp_uint_t res = o->type->stream_p->ioctl(o, MP_STREAM_SEEK, (mp_uint_t)&seek_s, &error);
+    if (res == MP_STREAM_ERROR) {
+        nlr_raise(mp_obj_new_exception_arg1(&mp_type_OSError, MP_OBJ_NEW_SMALL_INT(error)));
+    }
+
+    // TODO: Could be uint64
+    return mp_obj_new_int_from_uint(seek_s.offset);
+}
+MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_stream_seek_obj, 2, 3, stream_seek);
 
 MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_stream_read_obj, 1, 2, stream_read);
 MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_stream_readinto_obj, 2, 3, stream_readinto);

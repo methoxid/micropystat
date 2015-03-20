@@ -337,11 +337,12 @@ static int tinf_inflate_block_data(TINF_DATA *d, TINF_TREE *lt, TINF_TREE *dt)
          }
 
          *d->dest++ = sym;
+         d->destRemaining--;
 
       } else {
 
-         int length, dist, offs;
-         int i;
+         unsigned int length, offs, i;
+         int dist;
 
          sym -= 257;
 
@@ -362,10 +363,11 @@ static int tinf_inflate_block_data(TINF_DATA *d, TINF_TREE *lt, TINF_TREE *dt)
          /* copy match */
          for (i = 0; i < length; ++i)
          {
-            d->dest[i] = d->dest[i - offs];
+            d->dest[i] = d->dest[(int)(i - offs)];
          }
 
          d->dest += length;
+         d->destRemaining -= length;
       }
    }
 }
@@ -397,6 +399,7 @@ static int tinf_inflate_uncompressed_block(TINF_DATA *d)
 
    /* copy block */
    for (i = length; i; --i) *d->dest++ = *d->source++;
+   d->destRemaining -= length;
 
    /* make sure we start next block on a byte boundary */
    d->bitcount = 0;
@@ -429,7 +432,7 @@ static int tinf_inflate_dynamic_block(TINF_DATA *d)
  * ---------------------- */
 
 /* initialize global (static) data */
-void tinf_init()
+void tinf_init(void)
 {
 #ifdef RUNTIME_BITS_TABLES
    /* build extra bits and base tables */
@@ -446,6 +449,7 @@ void tinf_init()
 int tinf_uncompress(void *dest, unsigned int *destLen,
                     const void *source, unsigned int sourceLen)
 {
+   (void)sourceLen;
    TINF_DATA d;
    int res;
 

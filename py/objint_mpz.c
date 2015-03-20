@@ -24,22 +24,20 @@
  * THE SOFTWARE.
  */
 
-#include <stdint.h>
 #include <string.h>
 #include <stdio.h>
 #include <assert.h>
 
-#include "mpconfig.h"
-#include "nlr.h"
-#include "misc.h"
-#include "qstr.h"
-#include "parsenumbase.h"
-#include "obj.h"
-#include "smallint.h"
-#include "mpz.h"
-#include "objint.h"
-#include "runtime0.h"
-#include "runtime.h"
+#include "py/nlr.h"
+#include "py/parsenumbase.h"
+#include "py/smallint.h"
+#include "py/objint.h"
+#include "py/runtime0.h"
+#include "py/runtime.h"
+
+#if MICROPY_PY_BUILTINS_FLOAT
+#include <math.h>
+#endif
 
 #if MICROPY_LONGINT_IMPL == MICROPY_LONGINT_IMPL_MPZ
 
@@ -112,6 +110,27 @@ bool mp_obj_int_is_positive(mp_obj_t self_in) {
     }
     mp_obj_int_t *self = self_in;
     return !self->mpz.neg;
+}
+
+// This must handle int and bool types, and must raise a
+// TypeError if the argument is not integral
+mp_obj_t mp_obj_int_abs(mp_obj_t self_in) {
+    if (MP_OBJ_IS_TYPE(self_in, &mp_type_int)) {
+        mp_obj_int_t *self = self_in;
+        mp_obj_int_t *self2 = mp_obj_int_new_mpz();
+        mpz_abs_inpl(&self2->mpz, &self->mpz);
+        return self2;
+    } else {
+        mp_int_t val = mp_obj_get_int(self_in);
+        if (val == MP_SMALL_INT_MIN) {
+            return mp_obj_new_int_from_ll(-val);
+        } else {
+            if (val < 0) {
+                val = -val;
+            }
+            return MP_OBJ_NEW_SMALL_INT(val);
+        }
+    }
 }
 
 mp_obj_t mp_obj_int_unary_op(mp_uint_t op, mp_obj_t o_in) {
@@ -298,6 +317,26 @@ mp_obj_t mp_obj_new_int_from_uint(mp_uint_t value) {
     return mp_obj_new_int_from_ll(value);
 }
 
+#if MICROPY_PY_BUILTINS_FLOAT
+mp_obj_t mp_obj_new_int_from_float(mp_float_t val) {
+    int cl = fpclassify(val);
+    if (cl == FP_INFINITE) {
+        nlr_raise(mp_obj_new_exception_msg_varg(&mp_type_OverflowError, "can't convert inf to int"));
+    } else if (cl == FP_NAN) {
+        nlr_raise(mp_obj_new_exception_msg_varg(&mp_type_ValueError, "can't convert NaN to int"));
+    } else {
+        mp_fp_as_int_class_t icl = mp_classify_fp_as_int(val);
+        if (icl == MP_FP_CLASS_FIT_SMALLINT) {
+            return MP_OBJ_NEW_SMALL_INT((mp_int_t)val);
+        } else {
+            mp_obj_int_t *o = mp_obj_int_new_mpz();
+            mpz_set_from_float(&o->mpz, val);
+            return o;
+        }
+    }
+}
+#endif
+
 mp_obj_t mp_obj_new_int_from_str_len(const char **str, mp_uint_t len, bool neg, mp_uint_t base) {
     mp_obj_int_t *o = mp_obj_int_new_mpz();
     mp_uint_t n = mpz_set_from_str(&o->mpz, *str, len, neg, base);
@@ -305,12 +344,12 @@ mp_obj_t mp_obj_new_int_from_str_len(const char **str, mp_uint_t len, bool neg, 
     return o;
 }
 
-mp_int_t mp_obj_int_get(mp_const_obj_t self_in) {
+mp_int_t mp_obj_int_get_truncated(mp_const_obj_t self_in) {
     if (MP_OBJ_IS_SMALL_INT(self_in)) {
         return MP_OBJ_SMALL_INT_VALUE(self_in);
     } else {
         const mp_obj_int_t *self = self_in;
-        // TODO this is a hack until we remove mp_obj_int_get function entirely
+        // hash returns actual int value if it fits in mp_int_t
         return mpz_hash(&self->mpz);
     }
 }

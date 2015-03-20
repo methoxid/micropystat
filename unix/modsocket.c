@@ -38,17 +38,12 @@
 #include <netdb.h>
 #include <errno.h>
 
-#include "mpconfig.h"
-#include "nlr.h"
-#include "misc.h"
-#include "qstr.h"
-#include "obj.h"
-#include "objtuple.h"
-#include "objarray.h"
-#include "objstr.h"
-#include "runtime.h"
-#include "stream.h"
-#include "builtin.h"
+#include "py/nlr.h"
+#include "py/objtuple.h"
+#include "py/objstr.h"
+#include "py/runtime.h"
+#include "py/stream.h"
+#include "py/builtin.h"
 
 /*
   The idea of this module is to implement reasonable minimum of
@@ -88,6 +83,7 @@ STATIC mp_obj_socket_t *socket_new(int fd) {
 
 
 STATIC void socket_print(void (*print)(void *env, const char *fmt, ...), void *env, mp_obj_t self_in, mp_print_kind_t kind) {
+    (void)kind;
     mp_obj_socket_t *self = self_in;
     print(env, "<_socket %d>", self->fd);
 }
@@ -211,6 +207,7 @@ STATIC mp_obj_t socket_send(mp_uint_t n_args, const mp_obj_t *args) {
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(socket_send_obj, 2, 3, socket_send);
 
 STATIC mp_obj_t socket_setsockopt(mp_uint_t n_args, const mp_obj_t *args) {
+    (void)n_args; // always 4
     mp_obj_socket_t *self = args[0];
     int level = MP_OBJ_SMALL_INT_VALUE(args[1]);
     int option = mp_obj_get_int(args[2]);
@@ -218,7 +215,7 @@ STATIC mp_obj_t socket_setsockopt(mp_uint_t n_args, const mp_obj_t *args) {
     const void *optval;
     socklen_t optlen;
     if (MP_OBJ_IS_INT(args[3])) {
-        int val = mp_obj_int_get(args[3]);
+        int val = mp_obj_int_get_truncated(args[3]);
         optval = &val;
         optlen = sizeof(val);
     } else {
@@ -264,6 +261,9 @@ STATIC mp_obj_t socket_makefile(mp_uint_t n_args, const mp_obj_t *args) {
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(socket_makefile_obj, 1, 3, socket_makefile);
 
 STATIC mp_obj_t socket_make_new(mp_obj_t type_in, mp_uint_t n_args, mp_uint_t n_kw, const mp_obj_t *args) {
+    (void)type_in;
+    (void)n_kw;
+
     int family = AF_INET;
     int type = SOCK_STREAM;
     int proto = 0;
@@ -453,16 +453,7 @@ STATIC const mp_map_elem_t mp_module_socket_globals_table[] = {
 #undef C
 };
 
-STATIC const mp_obj_dict_t mp_module_socket_globals = {
-    .base = {&mp_type_dict},
-    .map = {
-        .all_keys_are_qstrs = 1,
-        .table_is_fixed_array = 1,
-        .used = MP_ARRAY_SIZE(mp_module_socket_globals_table),
-        .alloc = MP_ARRAY_SIZE(mp_module_socket_globals_table),
-        .table = (mp_map_elem_t*)mp_module_socket_globals_table,
-    },
-};
+STATIC MP_DEFINE_CONST_DICT(mp_module_socket_globals, mp_module_socket_globals_table);
 
 const mp_obj_module_t mp_module_socket = {
     .base = { &mp_type_module },

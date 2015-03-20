@@ -27,20 +27,15 @@
 #include <stdint.h>
 #include <string.h>
 
-#include "mpconfig.h"
-#include "misc.h"
-#include "qstr.h"
-#include "obj.h"
-#include "mpz.h"
-#include "objint.h"
-#include "pfenv.h"
+#include "py/objint.h"
+#include "py/pfenv.h"
 
 #if MICROPY_FLOAT_IMPL == MICROPY_FLOAT_IMPL_DOUBLE
 #include <stdio.h>
 #endif
 
 #if MICROPY_PY_BUILTINS_FLOAT
-#include "formatfloat.h"
+#include "py/formatfloat.h"
 #endif
 
 static const char pad_spaces[] = "                ";
@@ -183,7 +178,7 @@ int pfenv_print_int(const pfenv_t *pfenv, mp_uint_t x, int sgn, int base, int ba
     return len;
 }
 
-int pfenv_print_mp_int(const pfenv_t *pfenv, mp_obj_t x, int sgn, int base, int base_char, int flags, char fill, int width, int prec) {
+int pfenv_print_mp_int(const pfenv_t *pfenv, mp_obj_t x, int base, int base_char, int flags, char fill, int width, int prec) {
     if (!MP_OBJ_IS_INT(x)) {
         // This will convert booleans to int, or raise an error for
         // non-integer types.
@@ -311,7 +306,7 @@ int pfenv_print_mp_int(const pfenv_t *pfenv, mp_obj_t x, int sgn, int base, int 
     }
 
     if (buf != stack_buf) {
-        m_free(buf, buf_size);
+        m_del(char, buf, buf_size);
     }
     return len;
 }
@@ -331,7 +326,7 @@ int pfenv_print_float(const pfenv_t *pfenv, mp_float_t f, char fmt, int flags, c
     }
     int len;
 #if MICROPY_FLOAT_IMPL == MICROPY_FLOAT_IMPL_FLOAT
-    len = format_float(f, buf, sizeof(buf), fmt, prec, sign);
+    len = mp_format_float(f, buf, sizeof(buf), fmt, prec, sign);
 #elif MICROPY_FLOAT_IMPL == MICROPY_FLOAT_IMPL_DOUBLE
     char fmt_buf[6];
     char *fmt_s = fmt_buf;
@@ -346,12 +341,15 @@ int pfenv_print_float(const pfenv_t *pfenv, mp_float_t f, char fmt, int flags, c
     *fmt_s = '\0';
 
     len = snprintf(buf, sizeof(buf), fmt_buf, prec, f);
+    if (len < 0) {
+        len = 0;
+    }
 #else
 #error Unknown MICROPY FLOAT IMPL
 #endif
     char *s = buf;
 
-    if ((flags & PF_FLAG_ADD_PERCENT) && (len + 1) < sizeof(buf)) {
+    if ((flags & PF_FLAG_ADD_PERCENT) && (size_t)(len + 1) < sizeof(buf)) {
         buf[len++] = '%';
         buf[len] = '\0';
     }

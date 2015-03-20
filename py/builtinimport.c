@@ -25,26 +25,16 @@
  * THE SOFTWARE.
  */
 
-#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
 
-#include "mpconfig.h"
-#include "nlr.h"
-#include "misc.h"
-#include "qstr.h"
-#include "lexer.h"
-#include "lexerunix.h"
-#include "parse.h"
-#include "obj.h"
-#include "objmodule.h"
-#include "parsehelper.h"
-#include "compile.h"
-#include "runtime0.h"
-#include "runtime.h"
-#include "builtin.h"
-#include "builtintables.h"
+#include "py/nlr.h"
+#include "py/compile.h"
+#include "py/objmodule.h"
+#include "py/runtime.h"
+#include "py/builtin.h"
+#include "py/frozenmod.h"
 
 #if 0 // print debugging info
 #define DEBUG_PRINT (1)
@@ -56,6 +46,14 @@
 
 #define PATH_SEP_CHAR '/'
 
+#if MICROPY_MODULE_WEAK_LINKS
+STATIC const mp_map_elem_t mp_builtin_module_weak_links_table[] = {
+    MICROPY_PORT_BUILTIN_MODULE_WEAK_LINKS
+};
+
+STATIC MP_DEFINE_CONST_MAP(mp_builtin_module_weak_links_map, mp_builtin_module_weak_links_table);
+#endif
+
 bool mp_obj_is_package(mp_obj_t module) {
     mp_obj_t dest[2];
     mp_load_method_maybe(module, MP_QSTR___path__, dest);
@@ -63,13 +61,13 @@ bool mp_obj_is_package(mp_obj_t module) {
 }
 
 STATIC mp_import_stat_t stat_dir_or_file(vstr_t *path) {
-    //printf("stat %s\n", vstr_str(path));
-    mp_import_stat_t stat = mp_import_stat(vstr_str(path));
+    mp_import_stat_t stat = mp_import_stat(vstr_null_terminated_str(path));
+    DEBUG_printf("stat %s: %d\n", vstr_str(path), stat);
     if (stat == MP_IMPORT_STAT_DIR) {
         return stat;
     }
     vstr_add_str(path, ".py");
-    stat = mp_import_stat(vstr_str(path));
+    stat = mp_import_stat(vstr_null_terminated_str(path));
     if (stat == MP_IMPORT_STAT_FILE) {
         return stat;
     }
@@ -77,17 +75,18 @@ STATIC mp_import_stat_t stat_dir_or_file(vstr_t *path) {
 }
 
 STATIC mp_import_stat_t find_file(const char *file_str, uint file_len, vstr_t *dest) {
-    // extract the list of paths
-    mp_uint_t path_num = 0;
-    mp_obj_t *path_items;
 #if MICROPY_PY_SYS
+    // extract the list of paths
+    mp_uint_t path_num;
+    mp_obj_t *path_items;
     mp_obj_list_get(mp_sys_path, &path_num, &path_items);
-#endif
 
     if (path_num == 0) {
+#endif
         // mp_sys_path is empty, so just use the given file name
         vstr_add_strn(dest, file_str, file_len);
         return stat_dir_or_file(dest);
+#if MICROPY_PY_SYS
     } else {
         // go through each path looking for a directory or file
         for (mp_uint_t i = 0; i < path_num; i++) {
@@ -108,25 +107,47 @@ STATIC mp_import_stat_t find_file(const char *file_str, uint file_len, vstr_t *d
         // could not find a directory or file
         return MP_IMPORT_STAT_NO_EXIST;
     }
+#endif
 }
 
-STATIC void do_load(mp_obj_t module_obj, vstr_t *file) {
-    // create the lexer
-    mp_lexer_t *lex = mp_lexer_new_from_file(vstr_str(file));
+STATIC void do_load_from_lexer(mp_obj_t module_obj, mp_lexer_t *lex, const char *fname) {
 
     if (lex == NULL) {
         // we verified the file exists using stat, but lexer could still fail
-        nlr_raise(mp_obj_new_exception_msg_varg(&mp_type_ImportError, "No module named '%s'", vstr_str(file)));
+        if (MICROPY_ERROR_REPORTING == MICROPY_ERROR_REPORTING_TERSE) {
+            nlr_raise(mp_obj_new_exception_msg(&mp_type_ImportError, "module not found"));
+        } else {
+            nlr_raise(mp_obj_new_exception_msg_varg(&mp_type_ImportError,
+                "no module named '%s'", fname));
+        }
     }
 
     #if MICROPY_PY___FILE__
-    qstr source_name = mp_lexer_source_name(lex);
+    qstr source_name = lex->source_name;
     mp_store_attr(module_obj, MP_QSTR___file__, MP_OBJ_NEW_QSTR(source_name));
     #endif
 
     // parse, compile and execute the module in its context
     mp_obj_dict_t *mod_globals = mp_obj_module_get_globals(module_obj);
     mp_parse_compile_execute(lex, MP_PARSE_FILE_INPUT, mod_globals, mod_globals);
+}
+
+STATIC void do_load(mp_obj_t module_obj, vstr_t *file) {
+    // create the lexer
+    char *file_str = vstr_null_terminated_str(file);
+    mp_lexer_t *lex = mp_lexer_new_from_file(file_str);
+    do_load_from_lexer(module_obj, lex, file_str);
+}
+
+STATIC void chop_component(const char *start, const char **end) {
+    const char *p = *end;
+    while (p > start) {
+        if (*--p == '.') {
+            *end = p;
+            return;
+        }
+    }
+    *end = p;
 }
 
 mp_obj_t mp_builtin___import__(mp_uint_t n_args, const mp_obj_t *args) {
@@ -160,30 +181,38 @@ mp_obj_t mp_builtin___import__(mp_uint_t n_args, const mp_obj_t *args) {
         // http://legacy.python.org/dev/peps/pep-0328/#relative-imports-and-name
         // "Relative imports use a module's __name__ attribute to determine that
         // module's position in the package hierarchy."
+        level--;
         mp_obj_t this_name_q = mp_obj_dict_get(mp_globals_get(), MP_OBJ_NEW_QSTR(MP_QSTR___name__));
         assert(this_name_q != MP_OBJ_NULL);
+        mp_map_t *globals_map = mp_obj_dict_get_map(mp_globals_get());
+        mp_map_elem_t *elem = mp_map_lookup(globals_map, MP_OBJ_NEW_QSTR(MP_QSTR___path__), MP_MAP_LOOKUP);
+        bool is_pkg = (elem != NULL);
+
 #if DEBUG_PRINT
-        DEBUG_printf("Current module: ");
+        DEBUG_printf("Current module/package: ");
         mp_obj_print(this_name_q, PRINT_REPR);
+        DEBUG_printf(", is_package: %d", is_pkg);
         DEBUG_printf("\n");
 #endif
 
         mp_uint_t this_name_l;
         const char *this_name = mp_obj_str_get_data(this_name_q, &this_name_l);
 
-        uint dots_seen = 0;
-        const char *p = this_name + this_name_l - 1;
-        while (p > this_name) {
-            if (*p == '.') {
-                dots_seen++;
-                if (--level == 0) {
-                    break;
-                }
-            }
-            p--;
+        const char *p = this_name + this_name_l;
+        if (!is_pkg) {
+            // We have module, but relative imports are anchored at package, so
+            // go there.
+            chop_component(this_name, &p);
         }
 
-        if (dots_seen == 0 && level == 1) {
+
+        uint dots_seen = 0;
+        while (level--) {
+            chop_component(this_name, &p);
+            dots_seen++;
+        }
+
+        if (dots_seen == 0 && level >= 1) {
             // http://legacy.python.org/dev/peps/pep-0328/#relative-imports-and-name
             // "If the module's name does not contain any package information
             // (e.g. it is set to '__main__') then relative imports are
@@ -194,12 +223,13 @@ mp_obj_t mp_builtin___import__(mp_uint_t n_args, const mp_obj_t *args) {
             // package's __init__.py does something like "import .submod". So,
             // maybe we should check for package here? But quote above doesn't
             // talk about packages, it talks about dot-less module names.
+            DEBUG_printf("Warning: no dots in current module name and level>0\n");
             p = this_name + this_name_l;
-        } else if (level != 0) {
+        } else if (level != -1) {
             nlr_raise(mp_obj_new_exception_msg(&mp_type_ImportError, "Invalid relative import"));
         }
 
-        uint new_mod_l = (mod_len == 0 ? p - this_name : p - this_name + 1 + mod_len);
+        uint new_mod_l = (mod_len == 0 ? (size_t)(p - this_name) : (size_t)(p - this_name) + 1 + mod_len);
         char *new_mod = alloca(new_mod_l);
         memcpy(new_mod, this_name, p - this_name);
         if (mod_len != 0) {
@@ -215,7 +245,8 @@ mp_obj_t mp_builtin___import__(mp_uint_t n_args, const mp_obj_t *args) {
     }
 
     // check if module already exists
-    mp_obj_t module_obj = mp_module_get(mp_obj_str_get_qstr(module_name));
+    qstr module_name_qstr = mp_obj_str_get_qstr(module_name);
+    mp_obj_t module_obj = mp_module_get(module_name_qstr);
     if (module_obj != MP_OBJ_NULL) {
         DEBUG_printf("Module already loaded\n");
         // If it's not a package, return module right away
@@ -233,6 +264,15 @@ mp_obj_t mp_builtin___import__(mp_uint_t n_args, const mp_obj_t *args) {
     }
     DEBUG_printf("Module not yet loaded\n");
 
+    #if MICROPY_MODULE_FROZEN
+    mp_lexer_t *lex = mp_find_frozen_module(mod_str, mod_len);
+    if (lex != NULL) {
+        module_obj = mp_obj_new_module(module_name_qstr);
+        do_load_from_lexer(module_obj, lex, mod_str);
+        return module_obj;
+    }
+    #endif
+
     uint last = 0;
     VSTR_FIXED(path, MICROPY_ALLOC_PATH_MAX)
     module_obj = MP_OBJ_NULL;
@@ -244,7 +284,7 @@ mp_obj_t mp_builtin___import__(mp_uint_t n_args, const mp_obj_t *args) {
             // create a qstr for the module name up to this depth
             qstr mod_name = qstr_from_strn(mod_str, i);
             DEBUG_printf("Processing module: %s\n", qstr_str(mod_name));
-            DEBUG_printf("Previous path: %s\n", vstr_str(&path));
+            DEBUG_printf("Previous path: =%.*s=\n", vstr_len(&path), vstr_str(&path));
 
             // find the file corresponding to the module name
             mp_import_stat_t stat;
@@ -257,13 +297,13 @@ mp_obj_t mp_builtin___import__(mp_uint_t n_args, const mp_obj_t *args) {
                 vstr_add_strn(&path, mod_str + last, i - last);
                 stat = stat_dir_or_file(&path);
             }
-            DEBUG_printf("Current path: %s\n", vstr_str(&path));
+            DEBUG_printf("Current path: %.*s\n", vstr_len(&path), vstr_str(&path));
 
             if (stat == MP_IMPORT_STAT_NO_EXIST) {
                 #if MICROPY_MODULE_WEAK_LINKS
                 // check if there is a weak link to this module
                 if (i == mod_len) {
-                    mp_map_elem_t *el = mp_map_lookup((mp_map_t*)&mp_builtin_module_weak_links_dict_obj.map, MP_OBJ_NEW_QSTR(mod_name), MP_MAP_LOOKUP);
+                    mp_map_elem_t *el = mp_map_lookup((mp_map_t*)&mp_builtin_module_weak_links_map, MP_OBJ_NEW_QSTR(mod_name), MP_MAP_LOOKUP);
                     if (el == NULL) {
                         goto no_exist;
                     }
@@ -275,7 +315,12 @@ mp_obj_t mp_builtin___import__(mp_uint_t n_args, const mp_obj_t *args) {
                 {
                 #endif
                     // couldn't find the file, so fail
-                    nlr_raise(mp_obj_new_exception_msg_varg(&mp_type_ImportError, "No module named '%s'", qstr_str(mod_name)));
+                    if (MICROPY_ERROR_REPORTING == MICROPY_ERROR_REPORTING_TERSE) {
+                        nlr_raise(mp_obj_new_exception_msg(&mp_type_ImportError, "module not found"));
+                    } else {
+                        nlr_raise(mp_obj_new_exception_msg_varg(&mp_type_ImportError,
+                            "no module named '%s'", qstr_str(mod_name)));
+                    }
                 }
             } else {
                 // found the file, so get the module
@@ -296,15 +341,15 @@ mp_obj_t mp_builtin___import__(mp_uint_t n_args, const mp_obj_t *args) {
                 }
 
                 if (stat == MP_IMPORT_STAT_DIR) {
-                    DEBUG_printf("%s is dir\n", vstr_str(&path));
+                    DEBUG_printf("%.*s is dir\n", vstr_len(&path), vstr_str(&path));
                     // https://docs.python.org/3/reference/import.html
                     // "Specifically, any module that contains a __path__ attribute is considered a package."
                     mp_store_attr(module_obj, MP_QSTR___path__, mp_obj_new_str(vstr_str(&path), vstr_len(&path), false));
                     vstr_add_char(&path, PATH_SEP_CHAR);
                     vstr_add_str(&path, "__init__.py");
-                    if (mp_import_stat(vstr_str(&path)) != MP_IMPORT_STAT_FILE) {
+                    if (mp_import_stat(vstr_null_terminated_str(&path)) != MP_IMPORT_STAT_FILE) {
                         vstr_cut_tail_bytes(&path, sizeof("/__init__.py") - 1); // cut off /__init__.py
-                        printf("Notice: %s is imported as namespace package\n", vstr_str(&path));
+                        mp_warning("%s is imported as namespace package", vstr_str(&path));
                     } else {
                         do_load(module_obj, &path);
                         vstr_cut_tail_bytes(&path, sizeof("/__init__.py") - 1); // cut off /__init__.py

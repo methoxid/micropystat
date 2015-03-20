@@ -16,8 +16,12 @@
 #define MICROPY_HW_ENABLE_DAC       (1)
 #define MICROPY_HW_ENABLE_I2C1      (1)
 #define MICROPY_HW_ENABLE_SPI1      (1)
+#define MICROPY_HW_ENABLE_SPI2      (1)
 #define MICROPY_HW_ENABLE_SPI3      (0)
 #define MICROPY_HW_ENABLE_CAN       (1)
+
+// The pyboard has a 32kHz crystal for the RTC
+#define MICROPY_HW_RTC_USE_LSE      (1)
 
 // USRSW has no pullup or pulldown, and pressing the switch makes the input go low
 #define MICROPY_HW_USRSW_PIN        (pin_B3)
@@ -38,3 +42,7 @@
 #define MICROPY_HW_SDCARD_DETECT_PIN        (pin_A8)
 #define MICROPY_HW_SDCARD_DETECT_PULL       (GPIO_PULLUP)
 #define MICROPY_HW_SDCARD_DETECT_PRESENT    (GPIO_PIN_RESET)
+
+// USB config
+#define MICROPY_HW_USB_VBUS_DETECT_PIN (pin_A9)
+#define MICROPY_HW_USB_OTG_ID_PIN      (pin_A10)

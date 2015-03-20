@@ -29,13 +29,9 @@
 #include <stdarg.h>
 #include <errno.h>
 
-#include "mpconfig.h"
-#include "nlr.h"
-#include "misc.h"
-#include "qstr.h"
-#include "obj.h"
-#include "runtime.h"
-#include "stream.h"
+#include "py/nlr.h"
+#include "py/runtime.h"
+#include "py/stream.h"
 #include "uart.h"
 #include "pybioctl.h"
 #include MICROPY_HAL_H
@@ -94,21 +90,18 @@ struct _pyb_uart_obj_t {
     byte *read_buf;                     // byte or uint16_t, depending on char size
 };
 
-// pointers to all UART objects (if they have been created)
-STATIC pyb_uart_obj_t *pyb_uart_obj_all[6];
-
 STATIC mp_obj_t pyb_uart_deinit(mp_obj_t self_in);
 
 void uart_init0(void) {
-    for (int i = 0; i < MP_ARRAY_SIZE(pyb_uart_obj_all); i++) {
-        pyb_uart_obj_all[i] = NULL;
+    for (int i = 0; i < MP_ARRAY_SIZE(MP_STATE_PORT(pyb_uart_obj_all)); i++) {
+        MP_STATE_PORT(pyb_uart_obj_all)[i] = NULL;
     }
 }
 
 // unregister all interrupt sources
 void uart_deinit(void) {
-    for (int i = 0; i < MP_ARRAY_SIZE(pyb_uart_obj_all); i++) {
-        pyb_uart_obj_t *uart_obj = pyb_uart_obj_all[i];
+    for (int i = 0; i < MP_ARRAY_SIZE(MP_STATE_PORT(pyb_uart_obj_all)); i++) {
+        pyb_uart_obj_t *uart_obj = MP_STATE_PORT(pyb_uart_obj_all)[i];
         if (uart_obj != NULL) {
             pyb_uart_deinit(uart_obj);
         }
@@ -306,7 +299,7 @@ void uart_tx_strn_cooked(pyb_uart_obj_t *uart_obj, const char *str, uint len) {
 // this IRQ handler is set up to handle RXNE interrupts only
 void uart_irq_handler(mp_uint_t uart_id) {
     // get the uart object
-    pyb_uart_obj_t *self = pyb_uart_obj_all[uart_id - 1];
+    pyb_uart_obj_t *self = MP_STATE_PORT(pyb_uart_obj_all)[uart_id - 1];
 
     if (self == NULL) {
         // UART object has not been set, so we can't do anything, not
@@ -464,6 +457,28 @@ STATIC mp_obj_t pyb_uart_init_helper(pyb_uart_obj_t *self, mp_uint_t n_args, con
         HAL_NVIC_EnableIRQ(self->irqn);
     }
 
+    // compute actual baudrate that was configured
+    // (this formula assumes UART_OVERSAMPLING_16)
+    uint32_t actual_baudrate;
+    if (self->uart.Instance == USART1 || self->uart.Instance == USART6) {
+        actual_baudrate = HAL_RCC_GetPCLK2Freq();
+    } else {
+        actual_baudrate = HAL_RCC_GetPCLK1Freq();
+    }
+    actual_baudrate /= self->uart.Instance->BRR;
+
+    // check we could set the baudrate within 5%
+    uint32_t baudrate_diff;
+    if (actual_baudrate > init->BaudRate) {
+        baudrate_diff = actual_baudrate - init->BaudRate;
+    } else {
+        baudrate_diff = init->BaudRate - actual_baudrate;
+    }
+    init->BaudRate = actual_baudrate; // remember actual baudrate for printing
+    if (20 * baudrate_diff > init->BaudRate) {
+        nlr_raise(mp_obj_new_exception_msg_varg(&mp_type_ValueError, "set baudrate %d is not within 5%% of desired value", actual_baudrate));
+    }
+
     return mp_const_none;
 }
 
@@ -506,21 +521,21 @@ STATIC mp_obj_t pyb_uart_make_new(mp_obj_t type_in, mp_uint_t n_args, mp_uint_t 
         }
     } else {
         uart_id = mp_obj_get_int(args[0]);
-        if (uart_id < 1 || uart_id > MP_ARRAY_SIZE(pyb_uart_obj_all)) {
+        if (uart_id < 1 || uart_id > MP_ARRAY_SIZE(MP_STATE_PORT(pyb_uart_obj_all))) {
             nlr_raise(mp_obj_new_exception_msg_varg(&mp_type_ValueError, "UART(%d) does not exist", uart_id));
         }
     }
 
     pyb_uart_obj_t *self;
-    if (pyb_uart_obj_all[uart_id - 1] == NULL) {
+    if (MP_STATE_PORT(pyb_uart_obj_all)[uart_id - 1] == NULL) {
         // create new UART object
         self = m_new0(pyb_uart_obj_t, 1);
         self->base.type = &pyb_uart_type;
         self->uart_id = uart_id;
-        pyb_uart_obj_all[uart_id - 1] = self;
+        MP_STATE_PORT(pyb_uart_obj_all)[uart_id - 1] = self;
     } else {
         // reference existing UART object
-        self = pyb_uart_obj_all[uart_id - 1];
+        self = MP_STATE_PORT(pyb_uart_obj_all)[uart_id - 1];
     }
 
     if (n_args > 1 || n_kw > 0) {
@@ -621,6 +636,14 @@ STATIC mp_obj_t pyb_uart_readchar(mp_obj_t self_in) {
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(pyb_uart_readchar_obj, pyb_uart_readchar);
 
+// uart.sendbreak()
+STATIC mp_obj_t pyb_uart_sendbreak(mp_obj_t self_in) {
+    pyb_uart_obj_t *self = self_in;
+    self->uart.Instance->CR1 |= USART_CR1_SBK;
+    return mp_const_none;
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(pyb_uart_sendbreak_obj, pyb_uart_sendbreak);
+
 STATIC const mp_map_elem_t pyb_uart_locals_dict_table[] = {
     // instance methods
 
@@ -641,6 +664,7 @@ STATIC const mp_map_elem_t pyb_uart_locals_dict_table[] = {
 
     { MP_OBJ_NEW_QSTR(MP_QSTR_writechar), (mp_obj_t)&pyb_uart_writechar_obj },
     { MP_OBJ_NEW_QSTR(MP_QSTR_readchar), (mp_obj_t)&pyb_uart_readchar_obj },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_sendbreak), (mp_obj_t)&pyb_uart_sendbreak_obj },
 
     // class constants
     { MP_OBJ_NEW_QSTR(MP_QSTR_RTS), MP_OBJ_NEW_SMALL_INT(UART_HWCONTROL_RTS) },
@@ -713,13 +737,11 @@ STATIC mp_uint_t pyb_uart_write(mp_obj_t self_in, const void *buf_in, mp_uint_t 
     }
 }
 
-STATIC mp_uint_t pyb_uart_ioctl(mp_obj_t self_in, mp_uint_t request, int *errcode, ...) {
+STATIC mp_uint_t pyb_uart_ioctl(mp_obj_t self_in, mp_uint_t request, mp_uint_t arg, int *errcode) {
     pyb_uart_obj_t *self = self_in;
-    va_list vargs;
-    va_start(vargs, errcode);
     mp_uint_t ret;
     if (request == MP_IOCTL_POLL) {
-        mp_uint_t flags = va_arg(vargs, mp_uint_t);
+        mp_uint_t flags = arg;
         ret = 0;
         if ((flags & MP_IOCTL_POLL_RD) && uart_rx_any(self)) {
             ret |= MP_IOCTL_POLL_RD;
@@ -731,7 +753,6 @@ STATIC mp_uint_t pyb_uart_ioctl(mp_obj_t self_in, mp_uint_t request, int *errcod
         *errcode = EINVAL;
         ret = MP_STREAM_ERROR;
     }
-    va_end(vargs);
     return ret;
 }
 

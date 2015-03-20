@@ -28,13 +28,9 @@
 #include <stm32f4xx_hal.h>
 #include <string.h>
 
-#include "mpconfig.h"
-#include "misc.h"
-#include "nlr.h"
-#include "qstr.h"
-#include "obj.h"
-#include "runtime.h"
-#include "binary.h"
+#include "py/nlr.h"
+#include "py/runtime.h"
+#include "py/binary.h"
 #include "adc.h"
 #include "pin.h"
 #include "genhdr/pins.h"
@@ -232,7 +228,8 @@ STATIC mp_obj_t adc_read_timed(mp_obj_t self_in, mp_obj_t buf_in, mp_obj_t freq_
     // This uses the timer in polling mode to do the sampling
     // We could use DMA, but then we can't convert the values correctly for the buffer
     adc_config_channel(self);
-    for (uint index = 0; index < bufinfo.len; index++) {
+    uint nelems = bufinfo.len / typesize;
+    for (uint index = 0; index < nelems; index++) {
         // Wait for the timer to trigger
         while (__HAL_TIM_GET_FLAG(&TIM6_Handle, TIM_FLAG_UPDATE) == RESET) {
         }
@@ -357,7 +354,8 @@ float adc_read_core_vbat(ADC_HandleTypeDef *adcHandle) {
     //       be 12-bits.
     raw_value <<= (12 - adc_get_resolution(adcHandle));
 
-    return raw_value * VBAT_DIV / 4096.0f * 3.3f;
+    // multiplier is 3.3/4095
+    return raw_value * VBAT_DIV * 0.8058608058608059e-3f;
 }
 
 float adc_read_core_vref(ADC_HandleTypeDef *adcHandle) {
@@ -367,7 +365,8 @@ float adc_read_core_vref(ADC_HandleTypeDef *adcHandle) {
     //       be 12-bits.
     raw_value <<= (12 - adc_get_resolution(adcHandle));
 
-    return raw_value * VBAT_DIV / 4096.0f * 3.3f;
+    // multiplier is 3.3/4095
+    return raw_value * 0.8058608058608059e-3f;
 }
 #endif
 

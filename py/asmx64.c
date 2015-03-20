@@ -29,13 +29,12 @@
 #include <assert.h>
 #include <string.h>
 
-#include "mpconfig.h"
-#include "misc.h"
+#include "py/mpconfig.h"
 
 // wrapper around everything in this file
 #if MICROPY_EMIT_X64
 
-#include "asmx64.h"
+#include "py/asmx64.h"
 
 /* all offsets are measured in multiples of 8 bytes */
 #define WORD_SIZE                (8)
@@ -144,33 +143,23 @@ void asm_x64_free(asm_x64_t *as, bool free_code) {
 }
 
 void asm_x64_start_pass(asm_x64_t *as, uint pass) {
-    as->pass = pass;
-    as->code_offset = 0;
     if (pass == ASM_X64_PASS_COMPUTE) {
         // reset all labels
         memset(as->label_offsets, -1, as->max_num_labels * sizeof(mp_uint_t));
-    }
-}
-
-void asm_x64_end_pass(asm_x64_t *as) {
-    if (as->pass == ASM_X64_PASS_COMPUTE) {
-        MP_PLAT_ALLOC_EXEC(as->code_offset, (void**) &as->code_base, &as->code_size);
-        if(as->code_base == NULL) {
+    } if (pass == ASM_X64_PASS_EMIT) {
+        MP_PLAT_ALLOC_EXEC(as->code_offset, (void**)&as->code_base, &as->code_size);
+        if (as->code_base == NULL) {
             assert(0);
         }
         //printf("code_size: %u\n", as->code_size);
     }
+    as->pass = pass;
+    as->code_offset = 0;
+}
 
-    /*
-    // check labels are resolved
-    if (as->label != NULL)
-    {
-        int i;
-        for (i = 0; i < as->label->len; ++i)
-            if (g_array_index(as->label, Label, i).unresolved != NULL)
-                return false;
-    }
-    */
+void asm_x64_end_pass(asm_x64_t *as) {
+    // could check labels are resolved...
+    (void)as;
 }
 
 // all functions must go through this one to emit bytes
@@ -282,11 +271,13 @@ void asm_x64_push_i32(asm_x64_t *as, int src_i32) {
 }
 */
 
+/*
 void asm_x64_push_disp(asm_x64_t *as, int src_r64, int src_offset) {
     assert(src_r64 < 8);
     asm_x64_write_byte_1(as, OPCODE_PUSH_M64);
     asm_x64_write_r64_disp(as, 6, src_r64, src_offset);
 }
+*/
 
 void asm_x64_pop_r64(asm_x64_t *as, int dest_r64) {
     if (dest_r64 < 8) {
@@ -358,7 +349,7 @@ void asm_x64_mov_mem64_to_r64(asm_x64_t *as, int src_r64, int src_disp, int dest
     asm_x64_write_r64_disp(as, dest_r64, src_r64, src_disp);
 }
 
-void asm_x64_lea_disp_to_r64(asm_x64_t *as, int src_r64, int src_disp, int dest_r64) {
+STATIC void asm_x64_lea_disp_to_r64(asm_x64_t *as, int src_r64, int src_disp, int dest_r64) {
     // use REX prefix for 64 bit operation
     assert(src_r64 < 8);
     assert(dest_r64 < 8);
@@ -366,10 +357,12 @@ void asm_x64_lea_disp_to_r64(asm_x64_t *as, int src_r64, int src_disp, int dest_
     asm_x64_write_r64_disp(as, dest_r64, src_r64, src_disp);
 }
 
+/*
 void asm_x64_mov_i8_to_r8(asm_x64_t *as, int src_i8, int dest_r64) {
     assert(dest_r64 < 8);
     asm_x64_write_byte_2(as, OPCODE_MOV_I8_TO_R8 | dest_r64, src_i8);
 }
+*/
 
 STATIC void asm_x64_mov_i32_to_r64(asm_x64_t *as, int src_i32, int dest_r64) {
     // cpu defaults to i32 to r64, with zero extension
@@ -509,11 +502,11 @@ void asm_x64_setcc_r8(asm_x64_t *as, int jcc_type, int dest_r8) {
     asm_x64_write_byte_3(as, OPCODE_SETCC_RM8_A, OPCODE_SETCC_RM8_B | jcc_type, MODRM_R64(0) | MODRM_RM_REG | MODRM_RM_R64(dest_r8));
 }
 
-void asm_x64_label_assign(asm_x64_t *as, int label) {
+void asm_x64_label_assign(asm_x64_t *as, mp_uint_t label) {
     assert(label < as->max_num_labels);
     if (as->pass < ASM_X64_PASS_EMIT) {
         // assign label offset
-        assert(as->label_offsets[label] == -1);
+        assert(as->label_offsets[label] == (mp_uint_t)-1);
         as->label_offsets[label] = as->code_offset;
     } else {
         // ensure label offset has not changed from PASS_COMPUTE to PASS_EMIT
@@ -522,15 +515,15 @@ void asm_x64_label_assign(asm_x64_t *as, int label) {
     }
 }
 
-STATIC mp_uint_t get_label_dest(asm_x64_t *as, int label) {
+STATIC mp_uint_t get_label_dest(asm_x64_t *as, mp_uint_t label) {
     assert(label < as->max_num_labels);
     return as->label_offsets[label];
 }
 
-void asm_x64_jmp_label(asm_x64_t *as, int label) {
+void asm_x64_jmp_label(asm_x64_t *as, mp_uint_t label) {
     mp_uint_t dest = get_label_dest(as, label);
     mp_int_t rel = dest - as->code_offset;
-    if (dest != -1 && rel < 0) {
+    if (dest != (mp_uint_t)-1 && rel < 0) {
         // is a backwards jump, so we know the size of the jump on the first pass
         // calculate rel assuming 8 bit relative jump
         rel -= 2;
@@ -549,10 +542,10 @@ void asm_x64_jmp_label(asm_x64_t *as, int label) {
     }
 }
 
-void asm_x64_jcc_label(asm_x64_t *as, int jcc_type, int label) {
+void asm_x64_jcc_label(asm_x64_t *as, int jcc_type, mp_uint_t label) {
     mp_uint_t dest = get_label_dest(as, label);
     mp_int_t rel = dest - as->code_offset;
-    if (dest != -1 && rel < 0) {
+    if (dest != (mp_uint_t)-1 && rel < 0) {
         // is a backwards jump, so we know the size of the jump on the first pass
         // calculate rel assuming 8 bit relative jump
         rel -= 2;
@@ -598,7 +591,7 @@ void asm_x64_exit(asm_x64_t *as) {
 //  - numbered 0 through as->num_locals-1
 //  - RBP points above the last local
 //
-//                          | RPB
+//                          | RBP
 //                          v
 //  l0  l1  l2  ...  l(n-1)
 //  ^                ^

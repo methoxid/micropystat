@@ -14,11 +14,12 @@ UNAME_S := $(shell uname -s)
 include ../py/py.mk
 
 INC =  -I.
-INC += -I$(PY_SRC)
+INC +=  -I..
 INC += -I$(BUILD)
 
 # compiler settings
-CWARN = -Wall -Wpointer-arith -Werror
+CWARN = -Wall -Werror
+CWARN += -Wdouble-promotion -Wformat -Wmissing-declarations -Wmissing-prototypes -Wold-style-definition -Wpointer-arith -Wredundant-decls -Wshadow -Wsign-compare -Wstrict-prototypes -Wuninitialized -Wunused-parameter
 CFLAGS = $(INC) $(CWARN) -ansi -std=gnu99 -DUNIX $(CFLAGS_MOD) $(COPT) $(CFLAGS_EXTRA)
 
 # Debugging/Optimization
@@ -35,8 +36,8 @@ endif
 # if necessary override the value of 'CC' set in py/mkenv.mk
 ifeq ($(UNAME_S),Darwin)
 CC = clang
-# Use clang syntax for map file and set osx specific flags
-LDFLAGS_ARCH = -Wl,-order_file,$(BUILD)/order.def -Wl,-map,$@.map
+# Use clang syntax for map file
+LDFLAGS_ARCH = -Wl,-map,$@.map
 else
 # Use gcc syntax for map file
 LDFLAGS_ARCH = -Wl,-Map=$@.map,--cref
@@ -69,6 +70,10 @@ ifeq ($(MICROPY_PY_TERMIOS),1)
 CFLAGS_MOD += -DMICROPY_PY_TERMIOS=1
 SRC_MOD += modtermios.c
 endif
+ifeq ($(MICROPY_PY_SOCKET),1)
+CFLAGS_MOD += -DMICROPY_PY_SOCKET=1
+SRC_MOD += modsocket.c
+endif
 ifeq ($(MICROPY_PY_FFI),1)
 LIBFFI_LDFLAGS_MOD := $(shell pkg-config --libs libffi)
 LIBFFI_CFLAGS_MOD := $(shell pkg-config --cflags libffi)
@@ -87,22 +92,10 @@ SRC_C = \
 	gccollect.c \
 	input.c \
 	file.c \
-	modsocket.c \
 	modos.c \
 	alloc.c \
 	$(SRC_MOD)
 
-ifeq ($(UNAME_S),Darwin)
-# Must be the last file in list of sources
-SRC_C += seg_helpers.c
-
-# making seg_helpers.c rely on order.def will force order.def to be created
-seg_helpers.c: $(BUILD)/order.def
-
-# create order.def in build directory
-$(BUILD)/order.def:
-	$(Q)echo "seg_helpers.o: ___bss_start" > $@
-endif
 
 OBJ = $(PY_O) $(addprefix $(BUILD)/, $(SRC_C:.c=.o))
 
@@ -133,4 +126,19 @@ uninstall:
 # build synthetically fast interpreter for benchmarking
 fast:
 	@echo Make sure to run make -B
-	$(MAKE) COPT="-O2 -DNDEBUG" CFLAGS_EXTRA='-DMP_CONFIGFILE="<mpconfigport_fast.h>"' BUILD=build-fast
+	$(MAKE) COPT="-O2 -DNDEBUG -fno-crossjumping" CFLAGS_EXTRA='-DMP_CONFIGFILE="<mpconfigport_fast.h>"' BUILD=build-fast PROG=micropython_fast
+
+# build a minimal interpreter
+minimal:
+	@echo Make sure to run make -B
+	$(MAKE) COPT="-Os -DNDEBUG" CFLAGS_EXTRA='-DMP_CONFIGFILE="<mpconfigport_minimal.h>"' BUILD=build-minimal PROG=micropython_minimal MICROPY_PY_TIME=0 MICROPY_PY_TERMIOS=0 MICROPY_PY_SOCKET=0 MICROPY_PY_FFI=0
+
+# build an interpreter for coverage testing and do the testing
+coverage:
+	@echo Make sure to run make -B
+	$(MAKE) COPT="-O0" CFLAGS_EXTRA='-fprofile-arcs -ftest-coverage' LDFLAGS_EXTRA='-fprofile-arcs -ftest-coverage' BUILD=build-coverage PROG=micropython_coverage
+
+coverage_test: coverage
+	$(eval DIRNAME=$(notdir $(CURDIR)))
+	cd ../tests && MICROPY_MICROPYTHON=../$(DIRNAME)/micropython_coverage ./run-tests
+	gcov -o build-coverage/py ../py/*.c

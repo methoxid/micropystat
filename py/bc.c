@@ -29,17 +29,9 @@
 #include <string.h>
 #include <assert.h>
 
-#include "mpconfig.h"
-#include "nlr.h"
-#include "misc.h"
-#include "qstr.h"
-#include "obj.h"
-#include "objtuple.h"
-#include "objfun.h"
-#include "runtime0.h"
-#include "runtime.h"
-#include "bc.h"
-#include "stackctrl.h"
+#include "py/nlr.h"
+#include "py/objfun.h"
+#include "py/bc.h"
 
 #if 0 // print debugging info
 #define DEBUG_PRINT (1)
@@ -62,9 +54,8 @@ mp_uint_t mp_decode_uint(const byte **ptr) {
 
 STATIC NORETURN void fun_pos_args_mismatch(mp_obj_fun_bc_t *f, mp_uint_t expected, mp_uint_t given) {
 #if MICROPY_ERROR_REPORTING == MICROPY_ERROR_REPORTING_TERSE
-    // Generic message, to be reused for other argument issues
-    nlr_raise(mp_obj_new_exception_msg(&mp_type_TypeError,
-        "argument num/types mismatch"));
+    // generic message, used also for other argument issues
+    mp_arg_error_terse_mismatch();
 #elif MICROPY_ERROR_REPORTING == MICROPY_ERROR_REPORTING_NORMAL
     nlr_raise(mp_obj_new_exception_msg_varg(&mp_type_TypeError,
         "function takes %d positional arguments but %d were given", expected, given));
@@ -125,7 +116,7 @@ void mp_setup_code_state(mp_code_state *code_state, mp_obj_t self_in, mp_uint_t 
         // Apply processing and check below only if we don't have kwargs,
         // otherwise, kw handling code below has own extensive checks.
         if (n_kw == 0 && !self->has_def_kw_args) {
-            if (n_args >= self->n_pos_args - self->n_def_args) {
+            if (n_args >= (mp_uint_t)(self->n_pos_args - self->n_def_args)) {
                 // given enough arguments, but may need to use some default arguments
                 for (mp_uint_t i = n_args; i < self->n_pos_args; i++) {
                     code_state->state[n_state - 1 - i] = self->extra_args[i - (self->n_pos_args - self->n_def_args)];

@@ -23,6 +23,10 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+#ifndef __MICROPY_INCLUDED_PY_EMITGLUE_H__
+#define __MICROPY_INCLUDED_PY_EMITGLUE_H__
+
+#include "py/obj.h"
 
 // These variables and functions glue the code emitters to the runtime.
 
@@ -35,22 +39,7 @@ typedef enum {
     MP_CODE_NATIVE_ASM,
 } mp_raw_code_kind_t;
 
-typedef struct _mp_raw_code_t {
-    mp_raw_code_kind_t kind : 3;
-    mp_uint_t scope_flags : 7;
-    mp_uint_t n_pos_args : 11;
-    mp_uint_t n_kwonly_args : 11;
-    union {
-        struct {
-            byte *code;
-            mp_uint_t len;
-        } u_byte;
-        struct {
-            void *fun_data;
-            mp_uint_t type_sig; // for viper, compressed as 2-bit types; ret is MSB, then arg0, arg1, etc
-        } u_native;
-    };
-} mp_raw_code_t;
+typedef struct _mp_raw_code_t mp_raw_code_t;
 
 mp_raw_code_t *mp_emit_glue_new_raw_code(void);
 
@@ -59,3 +48,5 @@ void mp_emit_glue_assign_native(mp_raw_code_t *rc, mp_raw_code_kind_t kind, void
 
 mp_obj_t mp_make_function_from_raw_code(mp_raw_code_t *rc, mp_obj_t def_args, mp_obj_t def_kw_args);
 mp_obj_t mp_make_closure_from_raw_code(mp_raw_code_t *rc, mp_uint_t n_closed_over, const mp_obj_t *args);
+
+#endif // __MICROPY_INCLUDED_PY_EMITGLUE_H__

@@ -3,11 +3,11 @@
 # 1 "../py/qstrdefs.h"
 # 27 "../py/qstrdefs.h"
 # 1 "../py/mpconfig.h" 1
-# 43 "../py/mpconfig.h"
+# 45 "../py/mpconfig.h"
 # 1 "./mpconfigport.h" 1
 # 27 "./mpconfigport.h"
        
-# 71 "./mpconfigport.h"
+# 82 "./mpconfigport.h"
 extern const struct _mp_obj_fun_builtin_t mp_builtin_help_obj;
 extern const struct _mp_obj_fun_builtin_t mp_builtin_input_obj;
 extern const struct _mp_obj_fun_builtin_t mp_builtin_open_obj;
@@ -19,20 +19,24 @@ extern const struct _mp_obj_fun_builtin_t mp_builtin_open_obj;
 
 extern const struct _mp_obj_module_t pyb_module;
 extern const struct _mp_obj_module_t stm_module;
+extern const struct _mp_obj_module_t mp_module_ubinascii;
 extern const struct _mp_obj_module_t mp_module_ure;
 extern const struct _mp_obj_module_t mp_module_uzlib;
 extern const struct _mp_obj_module_t mp_module_ujson;
+extern const struct _mp_obj_module_t mp_module_uheapq;
+extern const struct _mp_obj_module_t mp_module_uhashlib;
 extern const struct _mp_obj_module_t mp_module_uos;
 extern const struct _mp_obj_module_t mp_module_utime;
 extern const struct _mp_obj_module_t mp_module_uselect;
 extern const struct _mp_obj_module_t mp_module_usocket;
 extern const struct _mp_obj_module_t mp_module_network;
-# 123 "./mpconfigport.h"
+# 174 "./mpconfigport.h"
 typedef int mp_int_t;
 typedef unsigned int mp_uint_t;
 typedef void *machine_ptr_t;
 typedef const void *machine_const_ptr_t;
-# 136 "./mpconfigport.h"
+typedef long mp_off_t;
+# 188 "./mpconfigport.h"
 # 1 "hal/inc/stm32f4xx_hal.h" 1
 # 48 "hal/inc/stm32f4xx_hal.h"
 # 1 "boards/BIPOT20/stm32f4xx_hal_conf.h" 1
@@ -5884,7 +5888,7 @@ void HAL_EnableDBGStandbyMode(void);
 void HAL_DisableDBGStandbyMode(void);
 void HAL_EnableCompensationCell(void);
 void HAL_DisableCompensationCell(void);
-# 137 "./mpconfigport.h" 2
+# 189 "./mpconfigport.h" 2
 
 static inline void enable_irq(mp_uint_t state) {
     __set_PRIMASK(state);
@@ -5895,9 +5899,9 @@ static inline mp_uint_t disable_irq(void) {
     __disable_irq();
     return state;
 }
-# 163 "./mpconfigport.h"
+# 215 "./mpconfigport.h"
 # 1 "boards/BIPOT20/mpconfigboard.h" 1
-# 164 "./mpconfigport.h" 2
+# 216 "./mpconfigport.h" 2
 
 
 # 1 "/opt/local/lib/gcc/arm-none-eabi/4.7.3/../../../../arm-none-eabi/include/alloca.h" 1 3
@@ -6243,14 +6247,19 @@ extern struct _reent *const _global_impure_ptr ;
 
 void _reclaim_reent (struct _reent *);
 # 12 "/opt/local/lib/gcc/arm-none-eabi/4.7.3/../../../../arm-none-eabi/include/alloca.h" 2 3
-# 167 "./mpconfigport.h" 2
-# 44 "../py/mpconfig.h" 2
-# 264 "../py/mpconfig.h"
+# 219 "./mpconfigport.h" 2
+# 46 "../py/mpconfig.h" 2
+# 318 "../py/mpconfig.h"
 typedef float mp_float_t;
 # 28 "../py/qstrdefs.h" 2
 
 
 
+
+
+QCFG(BYTES_IN_LEN, (1))
+
+Q()
 Q(*)
 Q(__build_class__)
 Q(__class__)
@@ -6262,6 +6271,7 @@ Q(__locals__)
 Q(__main__)
 Q(__module__)
 Q(__name__)
+Q(__hash__)
 Q(__next__)
 Q(__qualname__)
 Q(__path__)
@@ -6291,7 +6301,8 @@ Q(__gt__)
 Q(__eq__)
 Q(__le__)
 Q(__ge__)
-
+Q(__reversed__)
+# 86 "../py/qstrdefs.h"
 Q(micropython)
 Q(bytecode)
 Q(const)
@@ -6347,6 +6358,9 @@ Q(UnboundLocalError)
 Q(ValueError)
 Q(ZeroDivisionError)
 
+Q(UnicodeError)
+
+
 Q(None)
 Q(False)
 Q(True)
@@ -6389,12 +6403,16 @@ Q(divmod)
 Q(enumerate)
 Q(eval)
 Q(exec)
+
+Q(execfile)
+
 Q(filter)
 
 Q(float)
 
 Q(from_bytes)
 Q(getattr)
+Q(setattr)
 Q(globals)
 Q(hasattr)
 Q(hash)
@@ -6446,6 +6464,11 @@ Q(zip)
 
 Q(sep)
 Q(end)
+
+
+Q(step)
+Q(stop)
+
 
 Q(clear)
 Q(copy)
@@ -6568,6 +6591,7 @@ Q(frexp)
 Q(ldexp)
 Q(degrees)
 Q(radians)
+
 Q(erf)
 Q(erfc)
 Q(gamma)
@@ -6575,13 +6599,20 @@ Q(lgamma)
 
 
 
+
 Q(cmath)
 Q(phase)
 Q(polar)
 Q(rect)
-# 368 "../py/qstrdefs.h"
+# 395 "../py/qstrdefs.h"
+Q(mem_info)
+Q(qstr_info)
+
+
+
 Q(alloc_emergency_exception_buf)
 
+Q(maximum recursion depth exceeded)
 
 Q(<module>)
 Q(<lambda>)
@@ -6615,6 +6646,7 @@ Q(version_info)
 
 
 
+Q(print_exception)
 
 
 
@@ -6669,6 +6701,7 @@ Q(readall)
 Q(readinto)
 Q(readline)
 Q(readlines)
+Q(seek)
 Q(FileIO)
 Q(TextIOWrapper)
 Q(StringIO)
@@ -6722,3 +6755,16 @@ Q(uheapq)
 Q(heappush)
 Q(heappop)
 Q(heapify)
+
+
+
+Q(uhashlib)
+Q(update)
+Q(digest)
+Q(hexdigest)
+Q(sha256)
+
+
+
+Q(ubinascii)
+Q(hexlify)
