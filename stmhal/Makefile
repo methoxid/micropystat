@@ -2,7 +2,10 @@
 # then default to PYBV10.
 #NUSTAT10
 #BIPOT16
-BOARD ?= BIPOT20
+#BIPOT20
+#MSTAT01
+#STMBED20
+BOARD ?= STMBED20
 ifeq ($(wildcard boards/$(BOARD)/.),)
 $(error Invalid BOARD specified)
 endif

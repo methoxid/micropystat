@@ -289,7 +289,7 @@ int pyexec_friendly_repl(void) {
 #endif
 
 friendly_repl_reset:
-    mp_hal_stdout_tx_str("Micro Python " MICROPY_GIT_TAG " on " MICROPY_BUILD_DATE "; " MICROPY_HW_BOARD_NAME " with " MICROPY_HW_MCU_NAME "\r\n");
+    mp_hal_stdout_tx_str("Vestigen OS " MICROPY_GIT_TAG " on " MICROPY_BUILD_DATE "; " MICROPY_HW_BOARD_NAME " with " MICROPY_HW_MCU_NAME "\r\n");
     mp_hal_stdout_tx_str("Type \"help()\" for more information.\r\n");
 
     // to test ctrl-C

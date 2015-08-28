@@ -146,9 +146,9 @@ static const char fresh_pybcdc_inf[] =
 ;
 
 static const char fresh_readme_txt[] =
-"This is a Micro Python board\r\n"
+"This is a Vestigen health chip\r\n"
 "\r\n"
-"You can get started right away by writing your Python code in 'main.py'.\r\n"
+"You can get started right away by writing your code in 'main.py'.\r\n"
 "\r\n"
 "For a serial prompt:\r\n"
 " - Windows: you need to go to 'Device manager', right click on the unknown device,\r\n"
@@ -432,6 +432,10 @@ soft_reset:
 
     // Initialise the local flash filesystem.
     // Create it if needed, mount in on /flash, and set it as current dir.
+    /////AM: disable reset mode 3 when files are overwritten
+    if (reset_mode == 3) {
+        reset_mode = 1;
+    }
     init_flash_fs(reset_mode);
 
 #if MICROPY_HW_HAS_SDCARD
